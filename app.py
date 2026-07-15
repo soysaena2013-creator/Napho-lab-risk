@@ -51,29 +51,27 @@ if selected_dept: df_filtered = df_filtered[df_filtered['4.หน่วยงา
 # 4. คำนวณความเสี่ยงรายไตรมาส (ตามเงื่อนไขที่ 4 และ 5)
 # --- เริ่มแก้ไขที่ตำแหน่งประมาณบรรทัด 52 ---
 
-# --- แทนที่บรรทัดเดิมด้วยโค้ดชุดนี้ ---
+# --- แทนที่บล็อกการคำนวณ risk_summary ด้วยชุดนี้ ---
 
-# --- ให้วางโค้ดชุดนี้แทนที่บล็อก df_melted เดิม ---
-
-# 1. ค้นหาชื่อคอลัมน์ที่ถูกต้องแบบยืดหยุ่น (เพื่อป้องกัน KeyError จากชื่อไม่ตรง)
+# 1. ค้นหาชื่อคอลัมน์และรวบรวมข้อมูลความเสี่ยงย่อย
 sev_col_name = [c for c in df.columns if 'ระดับความรุนแรงทางคลินิก' in c][0] 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 
-# 2. ใช้ชื่อคอลัมน์ที่ค้นหาได้มาทำ melt
-df_melted = df_filtered.melt(id_vars=['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', sev_col_name], 
+# 2. ทำ Melt ข้อมูลเพื่อรวมความเสี่ยงย่อยทั้งหมดเข้าด้วยกัน
+df_melted = df_filtered.melt(id_vars=[sev_col_name], 
                              value_vars=risk_cols, 
                              value_name='Risk_Detail')
 
-# 3. กรองข้อมูลเอาเฉพาะแถวที่มีการระบุความเสี่ยง (ไม่เป็นค่าว่าง)
+# 3. กรองเอาเฉพาะข้อมูลที่มีการระบุความเสี่ยง
 df_melted = df_melted[df_melted['Risk_Detail'].notna() & (df_melted['Risk_Detail'] != '')]
 
-# 4. คำนวณ Severity โดยใช้ชื่อคอลัมน์ที่ค้นหาได้เช่นกัน
-risk_summary = df_melted.groupby(['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Risk_Detail']).agg(
+# 4. จัดกลุ่มตาม "ความเสี่ยงย่อย" เท่านั้น (ไม่แยกหน่วยงาน)
+risk_summary = df_melted.groupby(['Risk_Detail']).agg(
     Frequency=('Risk_Detail', 'count'),
     Severity_Raw=(sev_col_name, lambda x: x.iloc[0])
 ).reset_index()
 
-# 5. ใส่คะแนนตามเกณฑ์ของคุณ
+# 5. คำนวณคะแนนตามเกณฑ์
 risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
 risk_summary['Sev_Score'] = risk_summary['Severity_Raw'].apply(get_severity_score)
 risk_summary['Risk_Matrix'] = risk_summary['Freq_Score'] * risk_summary['Sev_Score']
