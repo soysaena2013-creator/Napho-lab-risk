@@ -51,27 +51,26 @@ if selected_dept: df_filtered = df_filtered[df_filtered['4.หน่วยงา
 # 4. คำนวณความเสี่ยงรายไตรมาส (ตามเงื่อนไขที่ 4 และ 5)
 # --- เริ่มแก้ไขที่ตำแหน่งประมาณบรรทัด 52 ---
 
-# 1. ตรวจสอบชื่อคอลัมน์ที่มีอยู่จริงใน DataFrame
-cols_to_group = ['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง']
-# เลือกเฉพาะคอลัมน์ที่มีอยู่จริงในข้อมูลเพื่อป้องกัน KeyError
-available_risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-cols_to_group.extend(available_risk_cols)
+# --- แทนที่บรรทัดเดิมด้วยโค้ดชุดนี้ ---
 
-# 2. ปรับการ groupby ให้ยืดหยุ่น
-risk_summary = df_filtered.groupby(cols_to_group).size().reset_index(name='Frequency')
+# 1. รวบรวมความเสี่ยงย่อยทุกประเภทให้เป็นคอลัมน์เดียว
+risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+df_melted = df_filtered.melt(id_vars=['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '2.2   ระดับความรุนแรงทางคลินิก (Severity)'], 
+                             value_vars=risk_cols, 
+                             value_name='Risk_Detail')
 
-# 3. คำนวณ Severity โดยตรวจสอบคอลัมน์ก่อน
-sev_col = '2.2   ระดับความรุนแรงทางคลินิก (Severity)'
-if sev_col in df_filtered.columns:
-    # คำนวณ Severity โดยจัดกลุ่มตามคอลัมน์เดิม
-    sev_scores = df_filtered.groupby(cols_to_group)[sev_col].apply(lambda x: get_severity_score(x.iloc[0])).reset_index(name='Sev_Score')
-    # รวมตารางเข้าด้วยกัน
-    risk_summary = pd.merge(risk_summary, sev_scores, on=cols_to_group)
-else:
-    risk_summary['Sev_Score'] = 1 
+# 2. กรองเอาเฉพาะแถวที่มีการระบุความเสี่ยง (ไม่เป็นค่าว่าง)
+df_melted = df_melted[df_melted['Risk_Detail'].notna() & (df_melted['Risk_Detail'] != '')]
 
-# 4. คำนวณ Risk Matrix ต่อจากเดิม
+# 3. คำนวณความถี่และคะแนนตามเงื่อนไข
+risk_summary = df_melted.groupby(['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Risk_Detail']).agg(
+    Frequency=('Risk_Detail', 'count'),
+    Severity_Raw=('2.2   ระดับความรุนแรงทางคลินิก (Severity)', lambda x: x.iloc[0])
+).reset_index()
+
+# 4. ใส่คะแนนตามเกณฑ์ของคุณ
 risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
+risk_summary['Sev_Score'] = risk_summary['Severity_Raw'].apply(get_severity_score)
 risk_summary['Risk_Matrix'] = risk_summary['Freq_Score'] * risk_summary['Sev_Score']
 risk_summary = risk_summary.sort_values(by='Risk_Matrix', ascending=False)
 
