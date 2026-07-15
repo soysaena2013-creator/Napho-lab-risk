@@ -53,27 +53,31 @@ if selected_dept: df_filtered = df_filtered[df_filtered['4.หน่วยงา
 
 # --- แทนที่บรรทัดเดิมด้วยโค้ดชุดนี้ ---
 
-# 1. รวบรวมความเสี่ยงย่อยทุกประเภทให้เป็นคอลัมน์เดียว
+# --- ให้วางโค้ดชุดนี้แทนที่บล็อก df_melted เดิม ---
+
+# 1. ค้นหาชื่อคอลัมน์ที่ถูกต้องแบบยืดหยุ่น (เพื่อป้องกัน KeyError จากชื่อไม่ตรง)
+sev_col_name = [c for c in df.columns if 'ระดับความรุนแรงทางคลินิก' in c][0] 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-df_melted = df_filtered.melt(id_vars=['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '2.2   ระดับความรุนแรงทางคลินิก (Severity)'], 
+
+# 2. ใช้ชื่อคอลัมน์ที่ค้นหาได้มาทำ melt
+df_melted = df_filtered.melt(id_vars=['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', sev_col_name], 
                              value_vars=risk_cols, 
                              value_name='Risk_Detail')
 
-# 2. กรองเอาเฉพาะแถวที่มีการระบุความเสี่ยง (ไม่เป็นค่าว่าง)
+# 3. กรองข้อมูลเอาเฉพาะแถวที่มีการระบุความเสี่ยง (ไม่เป็นค่าว่าง)
 df_melted = df_melted[df_melted['Risk_Detail'].notna() & (df_melted['Risk_Detail'] != '')]
 
-# 3. คำนวณความถี่และคะแนนตามเงื่อนไข
+# 4. คำนวณ Severity โดยใช้ชื่อคอลัมน์ที่ค้นหาได้เช่นกัน
 risk_summary = df_melted.groupby(['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Risk_Detail']).agg(
     Frequency=('Risk_Detail', 'count'),
-    Severity_Raw=('2.2   ระดับความรุนแรงทางคลินิก (Severity)', lambda x: x.iloc[0])
+    Severity_Raw=(sev_col_name, lambda x: x.iloc[0])
 ).reset_index()
 
-# 4. ใส่คะแนนตามเกณฑ์ของคุณ
+# 5. ใส่คะแนนตามเกณฑ์ของคุณ
 risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
 risk_summary['Sev_Score'] = risk_summary['Severity_Raw'].apply(get_severity_score)
 risk_summary['Risk_Matrix'] = risk_summary['Freq_Score'] * risk_summary['Sev_Score']
 risk_summary = risk_summary.sort_values(by='Risk_Matrix', ascending=False)
-
 # --- สิ้นสุดการแก้ไข ---
 # 5. แสดงผล Dashboard
 st.title("🏥 Dashboard ติดตามความเสี่ยงห้องปฏิบัติการ")
