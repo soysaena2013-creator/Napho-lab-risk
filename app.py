@@ -34,43 +34,38 @@ st.subheader("จำนวนความเสี่ยงแยกตามห
 unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
 st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4']), use_container_width=True)
 
-# 3. คำนวณ Risk Matrix (ข้อ 4 และ 5)
-def get_freq_score(count):
-    if count > 10: return 4
-    elif count >= 5: return 3
-    elif count >= 1: return 2
-    else: return 1
+# --- เริ่มต้นส่วนคำนวณที่ปรับปรุงใหม่ ---
 
-def get_sev_score(text):
-    text = str(text).upper()
-    if any(x in text for x in ['G', 'H', 'I']): return 4
-    elif any(x in text for x in ['E', 'F']): return 3
-    elif any(x in text for x in ['C', 'D']): return 2
-    return 1
+# 1. รวบรวมความเสี่ยงย่อยและนับความถี่ (ไม่แยกหน่วยงาน)
+risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+melted = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+melted = melted[melted['Risk_Detail'] != '']
 
-# รวมความเสี่ยงย่อย (Pre/Analytical/Post)
-# --- แก้ไขส่วนรวมความเสี่ยงย่อยตรงนี้ ---
+if not melted.empty:
+    matrix_df = melted.groupby('Risk_Detail').size().reset_index(name='Frequency')
 
-# --- ใช้โค้ดชุดนี้แทนที่ฟังก์ชัน get_sev_from_row เดิม ---
+    # 2. ฟังก์ชันดึง Severity ที่ปลอดภัย
+    def get_sev_from_row(risk_name):
+        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
+        if not sev_col: return 'A'
+        matches = df_f[df_f.isin([risk_name]).any(axis=1)]
+        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
 
-def get_sev_from_row(risk_name):
-    # ค้นหาคอลัมน์ที่มีคำว่า 'ระดับความรุนแรงทางคลินิก' เพื่อป้องกันปัญหาเว้นวรรคไม่ตรงกัน
-    sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
-    
-    if not sev_col:
-        return 'A' # ถ้าหาคอลัมน์ไม่เจอให้ค่าเริ่มต้นเป็น A
-        
-    matches = df_f[df_f.isin([risk_name]).any(axis=1)]
-    if not matches.empty:
-        # ใช้ชื่อคอลัมน์ที่เจอจากการค้นหา (sev_col[0]) แทนการพิมพ์ชื่อเต็ม
-        return matches[sev_col[0]].iloc[0]
-    return 'A'
+    # 3. คำนวณคะแนน
+    matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
+    matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
+    matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
+    matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
+    matrix_df = matrix_df.sort_values('Risk_Matrix', ascending=False)
 
-# --- สิ้นสุดการแก้ไข ---
+    # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
+    st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
+    st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
 
-# แสดงผล
-st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
-st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
+    # 5. แสดงผลแผนภูมิ
+    st.subheader("Risk Matrix Visualization")
+    st.plotly_chart(px.scatter(matrix_df, x='Freq_Score', y='Sev_Score', size='Frequency', color='Risk_Matrix', hover_name='Risk_Detail'), use_container_width=True)
+else:
+    st.warning("ไม่พบข้อมูลความเสี่ยงในตัวกรองที่เลือก")
 
-st.subheader("Risk Matrix Visualization")
-st.plotly_chart(px.scatter(matrix_df, x='Freq_Score', y='Sev_Score', size='Frequency', color='Risk_Matrix', hover_name='Risk_Detail'), use_container_width=True)
+# --- สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
