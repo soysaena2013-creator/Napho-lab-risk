@@ -135,13 +135,18 @@ fig = px.scatter(
 )
 
 # ปรับตำแหน่งตัวอักษรและเส้นตาราง
-fig.update_traces(textposition='top center')
-fig.update_layout(
-    xaxis=dict(tickmode='linear', dtick=1), 
-    yaxis=dict(tickmode='linear', dtick=1),
-    coloraxis_colorbar=dict(title="ระดับคะแนน")
+# --- ปรับแก้ส่วนนี้ในไฟล์ app.py ---
+
+fig.update_traces(
+    textposition='top center',    # วางไว้ด้านบน
+    textfont=dict(size=12),       # ปรับขนาดตัวอักษรให้เล็กลงถ้าจำเป็น
+    marker=dict(line=dict(width=1, color='DarkSlateGrey')),
+    texttemplate='%{text}'        # ใช้ Template เพื่อจัดการรูปแบบข้อความ
 )
 
-st.plotly_chart(fig, use_container_width=True)
-
+# ปรับเพิ่มระยะห่างระหว่างจุด (Jitter) ให้กราฟกระจายตัว
+fig.update_layout(
+    uniformtext_mode='hide',      # ซ่อนตัวหนังสือหากพื้นที่ไม่พอแทนที่จะซ้อนกัน
+    uniformtext_minsize=8,
+)
 # --- สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
