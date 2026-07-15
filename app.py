@@ -73,10 +73,7 @@ if not melted.empty:
 
     # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
     st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
-    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
-display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].copy()
-display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
-st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
+    st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
 
     # 5. แสดงผลแผนภูมิ
     # --- ส่วนการสร้างสีและระดับความเสี่ยง ---
