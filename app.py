@@ -63,22 +63,23 @@ risk_summary = df_melted.groupby(['Risk_Detail']).agg(
     Severity_Raw=(sev_col_name, lambda x: x.iloc[0])
 ).reset_index()
 
-risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
-risk_summary['Sev_Score'] = risk_summary['Severity_Raw'].apply(get_severity_score)
-risk_summary['Risk_Matrix'] = risk_summary['Freq_Score'] * risk_summary['Sev_Score']
-risk_summary = risk_summary.sort_values(by='Risk_Matrix', ascending=False)
+# --- วางโค้ดชุดนี้แทนที่ส่วนการแสดงผลเดิม ---
 
-# 2. การแสดงผล (วางต่อลงมาทันที)
 st.markdown("---")
+
+# 1. ตารางแสดงขึ้นก่อนตามที่คุณต้องการ
+st.subheader("ตารางสรุป Risk Matrix (รวมทุกหน่วยงาน)")
+st.dataframe(risk_summary[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], 
+             use_container_width=True, 
+             hide_index=True, 
+             height=200)
+
+# 2. แผนภูมิตามมาด้านล่าง
 st.subheader("Risk Matrix Visualization")
 fig_matrix = px.scatter(risk_summary, x="Freq_Score", y="Sev_Score", size="Frequency", 
                         color="Risk_Matrix", hover_name="Risk_Detail",
                         range_x=[0.5, 4.5], range_y=[0.5, 4.5])
 st.plotly_chart(fig_matrix, use_container_width=True)
-
-st.subheader("ตารางสรุป Risk Matrix (รวมทุกหน่วยงาน)")
-st.dataframe(risk_summary[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], 
-             use_container_width=True, hide_index=True, height=200)
 # --- สิ้นสุดการแก้ไข ---
 # 5. แสดงผล Dashboard
 st.title("🏥 Dashboard ติดตามความเสี่ยงห้องปฏิบัติการ")
