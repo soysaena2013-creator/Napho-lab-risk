@@ -142,4 +142,3 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
