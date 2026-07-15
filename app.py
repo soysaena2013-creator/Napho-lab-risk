@@ -64,13 +64,22 @@ df_melted = df_melted[df_melted['Risk_Detail'].notna() & (df_melted['Risk_Detail
 sev_col_name = [c for c in df.columns if 'ระดับความรุนแรงทางคลินิก' in c][0] 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 
-df_melted = df_filtered.melt(id_vars=[sev_col_name], value_vars=risk_cols, value_name='Risk_Detail')
-df_melted = df_melted[df_melted['Risk_Detail'].notna() & (df_melted['Risk_Detail'] != '')]
+# --- วางโค้ดชุดนี้แทนที่ "ทั้งส่วนตารางและแผนภูมิเดิม" ในไฟล์ app.py ---
 
-risk_summary = df_melted.groupby(['Risk_Detail']).agg(
-    Frequency=('Risk_Detail', 'count'),
-    Severity_Raw=(sev_col_name, lambda x: x.iloc[0])
-).reset_index()
+# 1. ส่วนการแสดงผลตาราง (ต้องอยู่บน)
+st.markdown("---")
+st.subheader("ตารางสรุป Risk Matrix (รวมทุกหน่วยงาน)")
+st.dataframe(risk_summary[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], 
+             use_container_width=True, hide_index=True, height=200)
+
+# 2. ส่วนการแสดงผลแผนภูมิ (ต้องอยู่ล่าง)
+st.subheader("Risk Matrix Visualization")
+fig_matrix = px.scatter(risk_summary, x="Freq_Score", y="Sev_Score", size="Frequency", 
+                        color="Risk_Matrix", hover_name="Risk_Detail",
+                        range_x=[0.5, 4.5], range_y=[0.5, 4.5])
+st.plotly_chart(fig_matrix, use_container_width=True)
+
+# --- จบการวางโค้ด ---
 
 # คำนวณคะแนนทุกคอลัมน์ให้อยู่ใน risk_summary
 risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
