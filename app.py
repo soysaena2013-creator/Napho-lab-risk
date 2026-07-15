@@ -10,7 +10,7 @@ st.set_page_config(layout="wide", page_title="Laboratory Risk Dashboard")
 @st.cache_data
 def load_data():
     # ใช้ URL ที่ Publish มาจาก Google Sheets
-    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pubhtml" 
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
     df = pd.read_csv(url)
     # จัดการชื่อคอลัมน์และวันที่ตามโครงสร้างไฟล์ของคุณ
     df['1.วันที่เกิดความเสี่ยง'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True)
