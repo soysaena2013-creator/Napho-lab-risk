@@ -96,7 +96,7 @@ color_map = {
 # --- ส่วนแสดงผลตาราง Risk Matrix ที่เพิ่มระดับความเสี่ยง ---
 matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
 
-st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+
 # จัดเรียงลำดับความสำคัญก่อนแสดงผล
 
 # จัดเรียงลำดับให้ Risk_Matrix สูงสุดอยู่บรรทัดบนสุด
