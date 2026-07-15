@@ -76,9 +76,41 @@ if not melted.empty:
     st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
 
     # 5. แสดงผลแผนภูมิ
-    st.subheader("Risk Matrix Visualization")
-    st.plotly_chart(px.scatter(matrix_df, x='Freq_Score', y='Sev_Score', size='Frequency', color='Risk_Matrix', hover_name='Risk_Detail'), use_container_width=True)
-else:
-    st.warning("ไม่พบข้อมูลความเสี่ยงในตัวกรองที่เลือก")
+    # --- ส่วนการสร้างสีและระดับความเสี่ยง ---
+def get_risk_level(score):
+    if score >= 7: return 'สูงมาก (สีแดง)'
+    elif score >= 5: return 'สูง (สีส้ม)'
+    elif score >= 4: return 'ปานกลาง (สีเหลือง)'
+    else: return 'ต่ำ (สีเขียว)'
+
+# เพิ่มคอลัมน์สีและระดับเข้าไปในตาราง
+matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+color_map = {
+    'สูงมาก (สีแดง)': '#FF0000',
+    'สูง (สีส้ม)': '#FFA500',
+    'ปานกลาง (สีเหลือง)': '#FFFF00',
+    'ต่ำ (สีเขียว)': '#008000'
+}
+
+# --- ส่วนการแสดงผล Visualization ---
+st.subheader("Risk Matrix Visualization")
+fig = px.scatter(
+    matrix_df, 
+    x='Freq_Score', 
+    y='Sev_Score', 
+    size='Frequency', 
+    color='Risk_Level',  # ใช้ระดับความเสี่ยงในการแบ่งสี
+    color_discrete_map=color_map, # กำหนดสีตามเกณฑ์
+    hover_name='Risk_Detail',
+    range_x=[0.5, 4.5], 
+    range_y=[0.5, 4.5]
+)
+
+# เพิ่มเส้นตารางหรือรายละเอียดความสวยงาม
+fig.update_layout(
+    xaxis=dict(tickmode='linear'),
+    yaxis=dict(tickmode='linear')
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # --- สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
