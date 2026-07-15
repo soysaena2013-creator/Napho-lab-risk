@@ -2,32 +2,69 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(layout="wide")
 
-# 2. โหลดข้อมูล (เปลี่ยนลิงก์เป็นลิงก์ CSV ของคุณ)
+# 1. โหลดข้อมูล
 @st.cache_data
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
-    df = pd.read_csv(url) 
+    df = pd.read_csv(url)
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True)
     return df
 
 df = load_data()
 
-# 3. ชื่อ Dashboard
+# 2. Sidebar Filters (ข้อ 1, 2, 3)
+st.sidebar.header("เครื่องมือสืบค้น")
+year = st.sidebar.multiselect("เลือกปี", df['Date'].dt.year.unique())
+quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
+risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
+unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
+
+df_f = df.copy()
+if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
+if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
+if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
+if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
+
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# 4. แผนภูมิแท่งสีน้ำเงิน (สรุปแยกตามหน่วยงาน)
+# แผนภูมิแท่งสรุปรายหน่วยงาน
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงาน")
-unit_summary = df.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
+unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
+st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4']), use_container_width=True)
 
-fig_bar = px.bar(
-    unit_summary, 
-    x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
-    y='count',
-    color_discrete_sequence=['#1f77b4'] # สีน้ำเงิน
-)
-st.plotly_chart(fig_bar, use_container_width=True)
+# 3. คำนวณ Risk Matrix (ข้อ 4 และ 5)
+def get_freq_score(count):
+    if count > 10: return 4
+    elif count >= 5: return 3
+    elif count >= 1: return 2
+    else: return 1
 
-# 5. ใส่ส่วนตารางและ Risk Matrix ต่อจากนี้ได้เลยครับ
+def get_sev_score(text):
+    text = str(text).upper()
+    if any(x in text for x in ['G', 'H', 'I']): return 4
+    elif any(x in text for x in ['E', 'F']): return 3
+    elif any(x in text for x in ['C', 'D']): return 2
+    return 1
+
+# รวมความเสี่ยงย่อย (Pre/Analytical/Post)
+risk_cols = ['ระบุความเสี่ยงย่อย (Pre-analytical)', ' ระบุความเสี่ยงย่อย (Analytical)', 'ระบุความเสี่ยงย่อย (Post-analytical)']
+melted = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+melted = melted[melted['Risk_Detail'] != '']
+
+matrix_df = melted.groupby('Risk_Detail').agg(Frequency=('Risk_Detail', 'count')).reset_index()
+# ดึง Severity ล่าสุดของความเสี่ยงนั้นๆ
+matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(lambda x: df_f[df_f.isin([x]).any(axis=1)]['2.2   ระดับความรุนแรงทางคลินิก (Severity)'].iloc[0] if not df_f[df_f.isin([x]).any(axis=1)].empty else 'A')
+
+matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
+matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
+matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
+matrix_df = matrix_df.sort_values('Risk_Matrix', ascending=False)
+
+# แสดงผล
+st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
+st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
+
+st.subheader("Risk Matrix Visualization")
+st.plotly_chart(px.scatter(matrix_df, x='Freq_Score', y='Sev_Score', size='Frequency', color='Risk_Matrix', hover_name='Risk_Detail'), use_container_width=True)
