@@ -79,7 +79,7 @@ if not melted.empty:
 
     # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
     st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
-    
+    st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
 # ส่วนนี้ต้องชิดซ้ายสุด (ไม่ควรมีการเว้นวรรคหน้าคำ)
 color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
 # เพิ่มบรรทัดนี้ก่อนบรรทัด display_df = ...
