@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 # --- วางฟังก์ชันเหล่านี้ไว้ที่ส่วนบนของไฟล์ ต่อจาก import ---
+def get_risk_level(score):
+    if score >= 7: return 'สูงมาก (สีแดง)'
+    elif score >= 5: return 'สูง (สีส้ม)'
+    elif score >= 4: return 'ปานกลาง (สีเหลือง)'
+    else: return 'ต่ำ (สีเขียว)'
+
 def get_freq_score(count):
     if count > 10: return 4
     elif count >= 5: return 3
@@ -73,7 +79,12 @@ if not melted.empty:
 
     # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
     st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
+        matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level) 
     st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
+        color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].copy()
+display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
+st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
 
     # 5. แสดงผลแผนภูมิ
     # --- ส่วนการสร้างสีและระดับความเสี่ยง ---
