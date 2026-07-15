@@ -93,24 +93,39 @@ color_map = {
 }
 
 # --- ส่วนการแสดงผล Visualization ---
-st.subheader("Risk Matrix Visualization")
+# --- ส่วนแสดงผลตาราง Risk Matrix ที่เพิ่มระดับความเสี่ยง ---
+matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+
+st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+# จัดเรียงลำดับความสำคัญก่อนแสดงผล
+display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']]
+st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+# --- ส่วนการแสดงผล Risk Matrix Visualization ที่แสดงชื่อความเสี่ยงย่อย ---
+st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+
 fig = px.scatter(
     matrix_df, 
     x='Freq_Score', 
     y='Sev_Score', 
     size='Frequency', 
-    color='Risk_Level',  # ใช้ระดับความเสี่ยงในการแบ่งสี
-    color_discrete_map=color_map, # กำหนดสีตามเกณฑ์
+    color='Risk_Level',
+    color_discrete_map={
+        'สูงมาก (สีแดง)': '#FF0000',
+        'สูง (สีส้ม)': '#FFA500',
+        'ปานกลาง (สีเหลือง)': '#FFFF00',
+        'ต่ำ (สีเขียว)': '#008000'
+    },
+    text='Risk_Detail', # แสดงชื่อความเสี่ยงย่อยบนจุดข้อมูล
     hover_name='Risk_Detail',
     range_x=[0.5, 4.5], 
     range_y=[0.5, 4.5]
 )
 
-# เพิ่มเส้นตารางหรือรายละเอียดความสวยงาม
-fig.update_layout(
-    xaxis=dict(tickmode='linear'),
-    yaxis=dict(tickmode='linear')
-)
+# ปรับตำแหน่งตัวอักษรให้ไม่ทับกัน
+fig.update_traces(textposition='top center')
+fig.update_layout(xaxis=dict(tickmode='linear'), yaxis=dict(tickmode='linear'))
+
 st.plotly_chart(fig, use_container_width=True)
 
 # --- สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
