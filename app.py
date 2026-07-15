@@ -7,10 +7,13 @@ st.set_page_config(layout="wide")
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
 # --- โหลดและเตรียมข้อมูล (ปรับ path ไฟล์ตามจริง) ---
+# แก้ไขส่วน load_data() ให้ใช้ URL แทนไฟล์ .xlsx
 @st.cache_data
 def load_data():
-    # โหลดไฟล์ข้อมูลจากระบุแหล่งที่มา
-    df = pd.read_excel("lab_risk_data.xlsx", sheet_name="การตอบแบบฟอร์ม 1") 
+    # ใส่ลิงก์ Google Sheets ของคุณที่นี่
+    sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
+    url = sheet_url.replace('/edit#gid=', '/export?format=xlsx&gid=')
+    df = pd.read_excel(url, sheet_name="การตอบแบบฟอร์ม 1") 
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'])
     return df
 
