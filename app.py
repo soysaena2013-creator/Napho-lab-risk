@@ -111,42 +111,4 @@ st.dataframe(
     use_container_width=True, 
     hide_index=True
 )
-# --- ส่วนการแสดงผล Risk Matrix Visualization ที่แสดงชื่อความเสี่ยงย่อย ---
-# --- ส่วนการสร้าง Risk Matrix Visualization พร้อมไล่ระดับสี ---
-
-st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-
-fig = px.scatter(
-    matrix_df, 
-    x='Freq_Score', 
-    y='Sev_Score', 
-    size='Frequency', 
-    color='Risk_Matrix', # ใช้คะแนนรวมในการกำหนดสี
-    color_continuous_scale=[
-        [0.0, "#008000"], # ต่ำ (สีเขียว)
-        [0.3, "#FFFF00"], # ปานกลาง (สีเหลือง)
-        [0.6, "#FFA500"], # สูง (สีส้ม)
-        [1.0, "#FF0000"]  # สูงมาก (สีแดง)
-    ],
-    text='Risk_Detail', 
-    hover_name='Risk_Detail',
-    range_x=[0.5, 4.5], 
-    range_y=[0.5, 4.5]
-)
-
-# ปรับตำแหน่งตัวอักษรและเส้นตาราง
-# --- ปรับแก้ส่วนนี้ในไฟล์ app.py ---
-
-fig.update_traces(
-    textposition='top center',    # วางไว้ด้านบน
-    textfont=dict(size=12),       # ปรับขนาดตัวอักษรให้เล็กลงถ้าจำเป็น
-    marker=dict(line=dict(width=1, color='DarkSlateGrey')),
-    texttemplate='%{text}'        # ใช้ Template เพื่อจัดการรูปแบบข้อความ
-)
-
-# ปรับเพิ่มระยะห่างระหว่างจุด (Jitter) ให้กราฟกระจายตัว
-fig.update_layout(
-    uniformtext_mode='hide',      # ซ่อนตัวหนังสือหากพื้นที่ไม่พอแทนที่จะซ้อนกัน
-    uniformtext_minsize=8,
-)
-# --- สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
+สิ้นสุดส่วนคำนวณที่ปรับปรุงใหม่ ---
