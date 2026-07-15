@@ -51,25 +51,22 @@ def get_sev_score(text):
 # รวมความเสี่ยงย่อย (Pre/Analytical/Post)
 # --- แก้ไขส่วนรวมความเสี่ยงย่อยตรงนี้ ---
 
-# ใช้การค้นหาชื่อคอลัมน์ที่มีคำว่า "ระบุความเสี่ยงย่อย" เพื่อป้องกันปัญหาเว้นวรรค
-risk_cols = [col for col in df.columns if 'ระบุความเสี่ยงย่อย' in col]
+# --- ใช้โค้ดชุดนี้แทนที่ฟังก์ชัน get_sev_from_row เดิม ---
 
-# รวมความเสี่ยงย่อยเข้าด้วยกัน
-melted = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-melted = melted[melted['Risk_Detail'] != '']
-
-# นับความถี่รวม (ไม่แยกหน่วยงาน)
-matrix_df = melted.groupby('Risk_Detail').size().reset_index(name='Frequency')
-
-# ดึงค่า Severity (ถ้าค่าไม่พบ ให้ใช้ระดับ 1 เป็นค่าเริ่มต้น)
 def get_sev_from_row(risk_name):
+    # ค้นหาคอลัมน์ที่มีคำว่า 'ระดับความรุนแรงทางคลินิก' เพื่อป้องกันปัญหาเว้นวรรคไม่ตรงกัน
+    sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
+    
+    if not sev_col:
+        return 'A' # ถ้าหาคอลัมน์ไม่เจอให้ค่าเริ่มต้นเป็น A
+        
     matches = df_f[df_f.isin([risk_name]).any(axis=1)]
     if not matches.empty:
-        # ดึงค่าจากคอลัมน์ระดับความรุนแรง (รหัสคอลัมน์ R ตามตาราง)
-        return matches['2.2   ระดับความรุนแรงทางคลินิก (Severity)'].iloc[0]
+        # ใช้ชื่อคอลัมน์ที่เจอจากการค้นหา (sev_col[0]) แทนการพิมพ์ชื่อเต็ม
+        return matches[sev_col[0]].iloc[0]
     return 'A'
 
-matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
+# --- สิ้นสุดการแก้ไข ---
 
 # แสดงผล
 st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
