@@ -98,7 +98,6 @@ matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
 
 st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 # จัดเรียงลำดับความสำคัญก่อนแสดงผล
-# --- ส่วนแสดงผลตาราง Risk Matrix (จัดเรียงลำดับใหม่) ---
 
 # จัดเรียงลำดับให้ Risk_Matrix สูงสุดอยู่บรรทัดบนสุด
 display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].sort_values(
