@@ -49,12 +49,33 @@ if selected_type: df_filtered = df_filtered[df_filtered['5.ประเภทค
 if selected_dept: df_filtered = df_filtered[df_filtered['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(selected_dept)]
 
 # 4. คำนวณความเสี่ยงรายไตรมาส (ตามเงื่อนไขที่ 4 และ 5)
-risk_summary = df_filtered.groupby(['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'ระบุความเสี่ยงย่อย (Pre-analytical)']).size().reset_index(name='Frequency')
+# --- เริ่มแก้ไขที่ตำแหน่งประมาณบรรทัด 52 ---
+
+# 1. ตรวจสอบชื่อคอลัมน์ที่มีอยู่จริงใน DataFrame
+cols_to_group = ['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง']
+# เลือกเฉพาะคอลัมน์ที่มีอยู่จริงในข้อมูลเพื่อป้องกัน KeyError
+available_risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+cols_to_group.extend(available_risk_cols)
+
+# 2. ปรับการ groupby ให้ยืดหยุ่น
+risk_summary = df_filtered.groupby(cols_to_group).size().reset_index(name='Frequency')
+
+# 3. คำนวณ Severity โดยตรวจสอบคอลัมน์ก่อน
+sev_col = '2.2   ระดับความรุนแรงทางคลินิก (Severity)'
+if sev_col in df_filtered.columns:
+    # คำนวณ Severity โดยจัดกลุ่มตามคอลัมน์เดิม
+    sev_scores = df_filtered.groupby(cols_to_group)[sev_col].apply(lambda x: get_severity_score(x.iloc[0])).reset_index(name='Sev_Score')
+    # รวมตารางเข้าด้วยกัน
+    risk_summary = pd.merge(risk_summary, sev_scores, on=cols_to_group)
+else:
+    risk_summary['Sev_Score'] = 1 
+
+# 4. คำนวณ Risk Matrix ต่อจากเดิม
 risk_summary['Freq_Score'] = risk_summary['Frequency'].apply(get_freq_score)
-risk_summary['Sev_Score'] = df_filtered.groupby(['Quarter', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'ระบุความเสี่ยงย่อย (Pre-analytical)'])['2.2   ระดับความรุนแรงทางคลินิก (Severity)'].apply(lambda x: get_severity_score(x.iloc[0])).values
 risk_summary['Risk_Matrix'] = risk_summary['Freq_Score'] * risk_summary['Sev_Score']
 risk_summary = risk_summary.sort_values(by='Risk_Matrix', ascending=False)
 
+# --- สิ้นสุดการแก้ไข ---
 # 5. แสดงผล Dashboard
 st.title("🏥 Dashboard ติดตามความเสี่ยงห้องปฏิบัติการ")
 
