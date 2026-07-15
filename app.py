@@ -112,6 +112,8 @@ st.dataframe(
     hide_index=True
 )
 # --- ส่วนการแสดงผล Risk Matrix Visualization ที่แสดงชื่อความเสี่ยงย่อย ---
+# --- ส่วนการสร้าง Risk Matrix Visualization พร้อมไล่ระดับสี ---
+
 st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
 
 fig = px.scatter(
@@ -119,22 +121,26 @@ fig = px.scatter(
     x='Freq_Score', 
     y='Sev_Score', 
     size='Frequency', 
-    color='Risk_Level',
-    color_discrete_map={
-        'สูงมาก (สีแดง)': '#FF0000',
-        'สูง (สีส้ม)': '#FFA500',
-        'ปานกลาง (สีเหลือง)': '#FFFF00',
-        'ต่ำ (สีเขียว)': '#008000'
-    },
-    text='Risk_Detail', # แสดงชื่อความเสี่ยงย่อยบนจุดข้อมูล
+    color='Risk_Matrix', # ใช้คะแนนรวมในการกำหนดสี
+    color_continuous_scale=[
+        [0.0, "#008000"], # ต่ำ (สีเขียว)
+        [0.3, "#FFFF00"], # ปานกลาง (สีเหลือง)
+        [0.6, "#FFA500"], # สูง (สีส้ม)
+        [1.0, "#FF0000"]  # สูงมาก (สีแดง)
+    ],
+    text='Risk_Detail', 
     hover_name='Risk_Detail',
     range_x=[0.5, 4.5], 
     range_y=[0.5, 4.5]
 )
 
-# ปรับตำแหน่งตัวอักษรให้ไม่ทับกัน
+# ปรับตำแหน่งตัวอักษรและเส้นตาราง
 fig.update_traces(textposition='top center')
-fig.update_layout(xaxis=dict(tickmode='linear'), yaxis=dict(tickmode='linear'))
+fig.update_layout(
+    xaxis=dict(tickmode='linear', dtick=1), 
+    yaxis=dict(tickmode='linear', dtick=1),
+    coloraxis_colorbar=dict(title="ระดับคะแนน")
+)
 
 st.plotly_chart(fig, use_container_width=True)
 
