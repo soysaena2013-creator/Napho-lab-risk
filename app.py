@@ -1,7 +1,20 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+# --- วางฟังก์ชันเหล่านี้ไว้ที่ส่วนบนของไฟล์ ต่อจาก import ---
+def get_freq_score(count):
+    if count > 10: return 4
+    elif count >= 5: return 3
+    elif count >= 1: return 2
+    else: return 1
 
+def get_sev_score(text):
+    text = str(text).upper()
+    if any(x in text for x in ['G', 'H', 'I']): return 4
+    elif any(x in text for x in ['E', 'F']): return 3
+    elif any(x in text for x in ['C', 'D']): return 2
+    return 1
+# ----------------------------------------------------
 st.set_page_config(layout="wide")
 
 # 1. โหลดข้อมูล
