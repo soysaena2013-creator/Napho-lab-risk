@@ -79,13 +79,6 @@ if not melted.empty:
 
     # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
     st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
-    # จัดเรียงลำดับความสำคัญก่อนแสดงผล
-
-# จัดเรียงลำดับให้ Risk_Matrix สูงสุดอยู่บรรทัดบนสุด
-display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].sort_values(
-    by='Risk_Matrix', 
-    ascending=False
-)
     st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
 # ส่วนนี้ต้องชิดซ้ายสุด (ไม่ควรมีการเว้นวรรคหน้าคำ)
 color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
@@ -95,12 +88,30 @@ display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']
 display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
 st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
 
+    # 5. แสดงผลแผนภูมิ
+    # --- ส่วนการสร้างสีและระดับความเสี่ยง ---
+
+# เพิ่มคอลัมน์สีและระดับเข้าไปในตาราง
+matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+color_map = {
+    'สูงมาก (สีแดง)': '#FF0000',
+    'สูง (สีส้ม)': '#FFA500',
+    'ปานกลาง (สีเหลือง)': '#FFFF00',
+    'ต่ำ (สีเขียว)': '#008000'
+}
+
 # --- ส่วนการแสดงผล Visualization ---
 # --- ส่วนแสดงผลตาราง Risk Matrix ที่เพิ่มระดับความเสี่ยง ---
 matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
 
 
+# จัดเรียงลำดับความสำคัญก่อนแสดงผล
 
+# จัดเรียงลำดับให้ Risk_Matrix สูงสุดอยู่บรรทัดบนสุด
+display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].sort_values(
+    by='Risk_Matrix', 
+    ascending=False
+)
 
 st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย - เรียงตามความสำคัญ)")
 st.dataframe(
