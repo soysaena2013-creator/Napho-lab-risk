@@ -113,7 +113,6 @@ st.plotly_chart(fig, use_container_width=True)
 
 # ลบบรรทัด fig.update_traces(textposition='top center') ออก
 # หรือใส่เครื่องหมาย # ไว้ข้างหน้า เพื่อไม่ให้มันพยายามเอาชื่อไปแปะบนกราฟ
-)
 
 # ลบบรรทัด fig.update_traces(textposition='top center') ออก
 # หรือใส่เครื่องหมาย # ไว้ข้างหน้า เพื่อไม่ให้มันพยายามเอาชื่อไปแปะบนกราฟ
