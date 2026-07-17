@@ -97,7 +97,7 @@ if not melted.empty:
     st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
     # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
         # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
-        fig = px.scatter(
+fig = px.scatter(
     matrix_df, 
     x='Freq_Score', 
     y='Sev_Score', 
