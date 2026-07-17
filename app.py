@@ -98,16 +98,18 @@ if not melted.empty:
     # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
         # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
 fig = px.scatter(
-    matrix_df, 
-    x='Freq_Score', 
-    y='Sev_Score', 
-    size='Frequency', 
-    color='Risk_Matrix',
-    color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-    hover_name='Risk_Detail',  # เปลี่ยนมาแสดงชื่อความเสี่ยงตรงนี้แทน
-    range_x=[0.5, 4.5], 
-    range_y=[0.5, 4.5]
-)
+        matrix_df, 
+        x='Freq_Score', 
+        y='Sev_Score', 
+        size='Frequency', 
+        color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', 
+        range_x=[0.5, 4.5], 
+        range_y=[0.5, 4.5]
+    ) # ตรวจสอบให้แน่ใจว่าบรรทัดนี้ปิดท้ายด้วยวงเล็บเดียวเท่านั้น
+    
+    # อย่าลืมลบบรรทัดที่เหลือที่อาจจะไม่มีโค้ดแล้ว แต่ยังมีวงเล็บ ) ค้างอยู่
 
 # ลบบรรทัด fig.update_traces(textposition='top center') ออก
 # หรือใส่เครื่องหมาย # ไว้ข้างหน้า เพื่อไม่ให้มันพยายามเอาชื่อไปแปะบนกราฟ
