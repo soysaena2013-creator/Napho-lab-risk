@@ -93,6 +93,7 @@ if not melted.empty:
 
     # แสดงผลแผนภูมิ
     st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    # แก้ไขส่วน fig = px.scatter ให้เพิ่มการกระจายตำแหน่งเล็กน้อย
     fig = px.scatter(
         matrix_df, 
         x='Freq_Score', 
@@ -102,7 +103,8 @@ if not melted.empty:
         color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
         hover_name='Risk_Detail', 
         range_x=[0.5, 4.5], 
-        range_y=[0.5, 4.5]
+        range_y=[0.5, 4.5],
+        jitter=0.1  # เพิ่มบรรทัดนี้เพื่อให้จุดกระจายตัวออกจากกันถ้าคะแนนเท่ากัน
     )
     st.plotly_chart(fig, use_container_width=True)
 
