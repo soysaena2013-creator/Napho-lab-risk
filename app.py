@@ -24,7 +24,6 @@ def get_sev_score(text):
 st.set_page_config(layout="wide")
 
 # 1. โหลดข้อมูล
-@st.cache_data
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
     df = pd.read_csv(url)
