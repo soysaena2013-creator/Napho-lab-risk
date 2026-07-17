@@ -70,30 +70,31 @@ if not melted.empty:
         matches = df_f[df_f.isin([risk_name]).any(axis=1)]
         return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
 
-    # คำนวณคะแนน
+    # คำนวณคะแนน (ครบถ้วนตามเดิม)
     matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
     matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
     
-    # จัดเรียงลำดับตามความสำคัญ
+    # จัดเรียงลำดับตามคะแนนความเสี่ยง
     matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
-    # 4. แสดงผลตาราง (แบบสวยงามชุดเดียว)
+    # แสดงผลตารางเดียวที่รวบรวมข้อมูลครบ (Frequency, Scores, Matrix, Level)
     st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
     
     color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
-    display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].copy()
+    display_df = matrix_df.copy()
     display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
     
+    # แสดงคอลัมน์ที่จำเป็นทั้งหมด
     st.dataframe(
-        display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], 
+        display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']], 
         use_container_width=True, 
         hide_index=True
     )
 
-    # 5. แสดงผลแผนภูมิ
+    # แสดงผลแผนภูมิ
     st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
     fig = px.scatter(
         matrix_df, 
