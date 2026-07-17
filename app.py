@@ -94,22 +94,22 @@ if not melted.empty:
     )
 
     # แสดงผลแผนภูมิ
-    st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-    # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
-        # แก้ไขส่วน fig = px.scatter เป็นแบบนี้ครับ
+st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+
 fig = px.scatter(
-        matrix_df, 
-        x='Freq_Score', 
-        y='Sev_Score', 
-        size='Frequency', 
-        color='Risk_Matrix',
-        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-        hover_name='Risk_Detail', 
-        range_x=[0.5, 4.5], 
-        range_y=[0.5, 4.5]
-    ) # ตรวจสอบให้แน่ใจว่าบรรทัดนี้ปิดท้ายด้วยวงเล็บเดียวเท่านั้น
-    
-    # อย่าลืมลบบรรทัดที่เหลือที่อาจจะไม่มีโค้ดแล้ว แต่ยังมีวงเล็บ ) ค้างอยู่
+    matrix_df, 
+    x='Freq_Score', 
+    y='Sev_Score', 
+    size='Frequency', 
+    color='Risk_Matrix',
+    color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+    hover_name='Risk_Detail', 
+    range_x=[0.5, 4.5], 
+    range_y=[0.5, 4.5]
+)
+
+# เพิ่มคำสั่งแสดงแผนภูมิ
+st.plotly_chart(fig, use_container_width=True)
 
 # ลบบรรทัด fig.update_traces(textposition='top center') ออก
 # หรือใส่เครื่องหมาย # ไว้ข้างหน้า เพื่อไม่ให้มันพยายามเอาชื่อไปแปะบนกราฟ
