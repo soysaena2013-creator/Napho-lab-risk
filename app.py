@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 # --- วางฟังก์ชันเหล่านี้ไว้ที่ส่วนบนของไฟล์ ต่อจาก import ---
 def get_risk_level(score):
     if score >= 7: return 'สูงมาก (สีแดง)'
