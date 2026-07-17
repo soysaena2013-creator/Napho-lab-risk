@@ -63,90 +63,50 @@ melted = melted[melted['Risk_Detail'] != '']
 if not melted.empty:
     matrix_df = melted.groupby('Risk_Detail').size().reset_index(name='Frequency')
 
-    # 2. ฟังก์ชันดึง Severity ที่ปลอดภัย
+    # ฟังก์ชันดึง Severity ที่ปลอดภัย
     def get_sev_from_row(risk_name):
         sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
         if not sev_col: return 'A'
         matches = df_f[df_f.isin([risk_name]).any(axis=1)]
         return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
 
-    # 3. คำนวณคะแนน
+    # คำนวณคะแนน
     matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
     matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
-    matrix_df = matrix_df.sort_values('Risk_Matrix', ascending=False)
+    matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+    
+    # จัดเรียงลำดับตามความสำคัญ
+    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
-    # 4. แสดงผลตาราง (พร้อมเช็คความปลอดภัย)
-    st.subheader("ตาราง Risk Matrix (รวมความเสี่ยงย่อย)")
-    st.dataframe(matrix_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix']], use_container_width=True)
-# ส่วนนี้ต้องชิดซ้ายสุด (ไม่ควรมีการเว้นวรรคหน้าคำ)
-color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
-# เพิ่มบรรทัดนี้ก่อนบรรทัด display_df = ...
-matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
-display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].copy()
-display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
-st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
+    # 4. แสดงผลตาราง (แบบสวยงามชุดเดียว)
+    st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+    
+    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+    display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].copy()
+    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
+    
+    st.dataframe(
+        display_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'ระดับความเสี่ยง']], 
+        use_container_width=True, 
+        hide_index=True
+    )
 
     # 5. แสดงผลแผนภูมิ
-    # --- ส่วนการสร้างสีและระดับความเสี่ยง ---
-
-# เพิ่มคอลัมน์สีและระดับเข้าไปในตาราง
-matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
-color_map = {
-    'สูงมาก (สีแดง)': '#FF0000',
-    'สูง (สีส้ม)': '#FFA500',
-    'ปานกลาง (สีเหลือง)': '#FFFF00',
-    'ต่ำ (สีเขียว)': '#008000'
-}
-
-# --- ส่วนการแสดงผล Visualization ---
-# --- ส่วนแสดงผลตาราง Risk Matrix ที่เพิ่มระดับความเสี่ยง ---
-matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
-
-
-# จัดเรียงลำดับความสำคัญก่อนแสดงผล
-
-# จัดเรียงลำดับให้ Risk_Matrix สูงสุดอยู่บรรทัดบนสุด
-display_df = matrix_df[['Risk_Detail', 'Frequency', 'Risk_Matrix', 'Risk_Level']].sort_values(
-    by='Risk_Matrix', 
-    ascending=False
-)
-
-st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย - เรียงตามความสำคัญ)")
-st.dataframe(
-    display_df, 
-    use_container_width=True, 
-    hide_index=True
-)
-# --- ส่วนการสร้าง Risk Matrix Visualization พร้อมไล่ระดับสี ---
-
-st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-
-fig = px.scatter(
-    matrix_df, 
-    x='Freq_Score', 
-    y='Sev_Score', 
-    size='Frequency', 
-    color='Risk_Matrix', # ใช้คะแนนรวมในการกำหนดสี
-    color_continuous_scale=[
-        [0.0, "#008000"], # ต่ำ (สีเขียว)
-        [0.3, "#FFFF00"], # ปานกลาง (สีเหลือง)
-        [0.6, "#FFA500"], # สูง (สีส้ม)
-        [1.0, "#FF0000"]  # สูงมาก (สีแดง)
-    ],
-    text='Risk_Detail', 
-    hover_name='Risk_Detail',
-    range_x=[0.5, 4.5], 
-    range_y=[0.5, 4.5]
-)
-
-# ปรับตำแหน่งตัวอักษรและเส้นตาราง
-fig.update_traces(textposition='top center')
-fig.update_layout(
-    xaxis=dict(tickmode='linear', dtick=1), 
-    yaxis=dict(tickmode='linear', dtick=1),
-    coloraxis_colorbar=dict(title="ระดับคะแนน")
-)
-
-st.plotly_chart(fig, use_container_width=True)
+    st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    fig = px.scatter(
+        matrix_df, 
+        x='Freq_Score', 
+        y='Sev_Score', 
+        size='Frequency', 
+        color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        text='Risk_Detail', 
+        range_x=[0.5, 4.5], 
+        range_y=[0.5, 4.5]
+    )
+    fig.update_traces(textposition='top center')
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
