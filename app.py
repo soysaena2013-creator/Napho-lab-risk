@@ -69,24 +69,22 @@ if not melted.empty:
         matches = df_f[df_f.isin([risk_name]).any(axis=1)]
         return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
 
-    # คำนวณคะแนน (ครบถ้วนตามเดิม)
+    # คำนวณคะแนน
     matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
     matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
     
-    # จัดเรียงลำดับตามคะแนนความเสี่ยง
+    # จัดเรียงลำดับ
     matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
-    # แสดงผลตารางเดียวที่รวบรวมข้อมูลครบ (Frequency, Scores, Matrix, Level)
+    # แสดงผลตาราง
     st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
-    
     color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
     display_df = matrix_df.copy()
     display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
     
-    # แสดงคอลัมน์ที่จำเป็นทั้งหมด
     st.dataframe(
         display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']], 
         use_container_width=True, 
@@ -94,27 +92,19 @@ if not melted.empty:
     )
 
     # แสดงผลแผนภูมิ
-# แสดงผลแผนภูมิ
-st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-
-fig = px.scatter(
-    matrix_df, 
-    x='Freq_Score', 
-    y='Sev_Score', 
-    size='Frequency', 
-    color='Risk_Matrix',
-    color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-    hover_name='Risk_Detail', 
-    range_x=[0.5, 4.5], 
-    range_y=[0.5, 4.5]
-)
-
-# แสดงผลกราฟ
-st.plotly_chart(fig, use_container_width=True)
-
-else:
-    st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
-    fig.update_traces(textposition='top center')
+    st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    fig = px.scatter(
+        matrix_df, 
+        x='Freq_Score', 
+        y='Sev_Score', 
+        size='Frequency', 
+        color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', 
+        range_x=[0.5, 4.5], 
+        range_y=[0.5, 4.5]
+    )
     st.plotly_chart(fig, use_container_width=True)
+
 else:
     st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
