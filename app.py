@@ -91,28 +91,26 @@ if not melted.empty:
         hide_index=True
     )
 
+    
     # แสดงผลแผนภูมิ
     st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-    # แก้ไขส่วน fig = px.scatter ให้เพิ่มการกระจายตำแหน่งเล็กน้อย
-    import numpy as np # ตรวจสอบว่า import numpy as np ไว้ที่ด้านบนของไฟล์แล้ว
+    
+    # เพิ่ม Jitter เพื่อไม่ให้จุดทับกัน
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
 
-# เพิ่ม Jitter ให้กับตำแหน่ง x และ y เล็กน้อย
-matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
-matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
-
-fig = px.scatter(
-    matrix_df, 
-    x='x_jitter', 
-    y='y_jitter', 
-    size='Frequency', 
-    color='Risk_Matrix',
-    color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-    hover_name='Risk_Detail', 
-    range_x=[0.5, 4.5], 
-    range_y=[0.5, 4.5]
-)
-
-st.plotly_chart(fig, use_container_width=True)
+    fig = px.scatter(
+        matrix_df, 
+        x='x_jitter', 
+        y='y_jitter', 
+        size='Frequency', 
+        color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', 
+        range_x=[0.5, 4.5], 
+        range_y=[0.5, 4.5]
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 else:
     st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
