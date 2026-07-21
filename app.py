@@ -54,11 +54,14 @@ st.subheader("จำนวนความเสี่ยงแยกตามห
 unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
 st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4']), use_container_width=True)
 
-# --- เพิ่มตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss) ตรงนี้ครับ ---
+# --- ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss) ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
-col_name = "2.1 รูปแบบเหตุการณ์"
 
-if col_name in df_f.columns and not df_f.empty:
+# ค้นหาชื่อคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' โดยอัตโนมัติ เพื่อป้องกันปัญหาชื่อไม่ตรง
+matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
+
+if matched_cols and not df_f.empty:
+    col_name = matched_cols[0]
     stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     
@@ -68,7 +71,7 @@ if col_name in df_f.columns and not df_f.empty:
             
     st.dataframe(stats_df, use_container_width=True)
 else:
-    st.info(f"ไม่พบข้อมูลคอลัมน์ '{col_name}' หรือไม่มีข้อมูลในช่วงที่เลือก")
+    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' ในไฟล์ กรุณาตรวจสอบชื่อคอลัมน์อีกครั้ง")
 # ------------------------------------------------------------------
 
 # --- เริ่มต้นส่วนคำนวณ Risk Matrix ---
