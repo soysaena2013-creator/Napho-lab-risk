@@ -49,16 +49,35 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# แผนภูมิแท่งสรุปรายหน่วยงาน
-st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงาน")
-unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
-st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4']), use_container_width=True)
+# --- แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
+st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
+
+matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
+
+if matched_cols and not df_f.empty:
+    col_name = matched_cols[0]
+    
+    # จัดกลุ่มข้อมูลเพื่อนับจำนวนตามหน่วยงานและรูปแบบเหตุการณ์
+    bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
+    
+    # สร้างกราฟแท่งแบบแยกสีตาม Miss / Near Miss
+    fig_bar = px.bar(
+        bar_df, 
+        x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+        y='count', 
+        color=col_name, 
+        barmode='group', # เปลี่ยนเป็น 'stack' ได้หากต้องการให้แท่งซ้อนกัน
+        text_auto=True
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+else:
+    # กรณีหาคอลัมน์ไม่เจอ ให้แสดงกราฟแท่งเดี่ยวแบบเดิมกัน Error
+    unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
+    st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True), use_container_width=True)
+# ------------------------------------------------------------------
 
 # --- ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss) ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
-
-# ค้นหาชื่อคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' โดยอัตโนมัติ เพื่อป้องกันปัญหาชื่อไม่ตรง
-matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
