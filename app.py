@@ -34,16 +34,30 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters (ข้อ 1, 2, 3)
+# 2. Sidebar Filters (เพิ่มตัวเลือกเดือน)
 st.sidebar.header("เครื่องมือสืบค้น")
-year = st.sidebar.multiselect("เลือกปี", df['Date'].dt.year.unique())
+year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
+
+# เพิ่มฟังก์ชันเลือกเดือน (แสดงชื่อเดือนเป็นภาษาไทยเพื่อให้ใช้งานง่าย)
+month_names = {
+    1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
+    5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม",
+    9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม"
+}
+available_months = sorted(df['Date'].dt.month.unique())
+month_options = {month_names[m]: m for m in available_months}
+selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
+selected_months = [month_options[m] for m in selected_month_names]
+
 risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
 unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
 
+# กรองข้อมูลตามเงื่อนไขที่เลือก
 df_f = df.copy()
 if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
 if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
+if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
 if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
 if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
 
@@ -66,7 +80,7 @@ if matched_cols and not df_f.empty:
         x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
         y='count', 
         color=col_name, 
-        barmode='group', # เปลี่ยนเป็น 'stack' ได้หากต้องการให้แท่งซ้อนกัน
+        barmode='group', 
         text_auto=True
     )
     st.plotly_chart(fig_bar, use_container_width=True)
@@ -90,7 +104,7 @@ if matched_cols and not df_f.empty:
             
     st.dataframe(stats_df, use_container_width=True)
 else:
-    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' ในไฟล์ กรุณาตรวจสอบชื่อคอลัมน์อีกครั้ง")
+    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' ในไฟล์ หรือไม่มีข้อมูลในช่วงที่เลือก")
 # ------------------------------------------------------------------
 
 # --- เริ่มต้นส่วนคำนวณ Risk Matrix ---
