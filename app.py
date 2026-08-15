@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+from fpdf import FPDF
+import tempfile
+import os
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -64,16 +67,73 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ปุ่มดาวน์โหลดรายงาน CSV (รองรับภาษาไทยใน Excel) ---
+# --- ฟังก์ชันสร้างรายงาน PDF รองรับภาษาไทย (ใช้ fpdf2) ---
+class ThaiPDF(FPDF):
+    def header(self):
+        # สามารถใส่หัวกระดาษได้ที่นี่หากต้องการ
+        pass
+
+def generate_pdf(dataframe):
+    pdf = ThaiPDF()
+    pdf.add_page()
+    
+    # ใช้ฟอนต์มาตรฐานยุโรปหรือเพิ่มฟอนต์ Unicode ที่รองรับไทย
+    # FPDF2 มีระบบจัดการฟอนต์เบื้องต้น หรือใช้ฟอนต์ Arial (หากเครื่องรองรับ)
+    # เพื่อความปลอดภัยสูงสุดในการแสดงผลภาษาไทยบน Cloud เราจะใช้ฟอนต์ DejaVu หรือฟอนต์มาตรฐานที่รองรับ Unicode
+    font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
+    font_path = "Sarabun-Regular.ttf"
+    
+    if not os.path.exists(font_path):
+        import urllib.request
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+        except:
+            pass
+
+    if os.path.exists(font_path):
+        pdf.add_font("Sarabun", "", font_path)
+        pdf.set_font("Sarabun", size=16)
+    else:
+        pdf.set_font("Arial", size=12)
+
+    # หัวข้อรายงาน
+    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report", ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_font("Sarabun", size=14) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+    pdf.cell(0, 8, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
+    pdf.ln(5)
+
+    pdf.cell(0, 8, txt="Summary Data List:", ln=True, align='L')
+    
+    # วนลูปแสดงข้อมูลตัวอย่างใน PDF (แสดงหน่วยงานและวันที่)
+    for idx, row in dataframe.head(30).iterrows():
+        date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
+        dept = str(row['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'])
+        text_line = f"- [{date_str}] หน่วยงาน: {dept}"
+        try:
+            pdf.cell(0, 7, txt=text_line, ln=True, align='L')
+        except UnicodeEncodeError:
+            pass # ข้ามบรรทัดที่มีปัญหาตัวอักษรพิเศษ
+
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(tmp_file.name)
+    return tmp_file.name
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงาน")
-csv_data = df_f.to_csv(index=False).encode('utf-8-sig') # utf-8-sig ป้องกันภาษาไทยเพี้ยนใน Excel
-st.sidebar.download_button(
-    label="📥 ดาวน์โหลดรายงาน (CSV)",
-    data=csv_data,
-    file_name="Risk_Report.csv",
-    mime="text/csv",
-)
+if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF"):
+    try:
+        pdf_path = generate_pdf(df_f)
+        with open(pdf_path, "rb") as f:
+            st.sidebar.download_button(
+                label="คลิกเพื่อบันทึกไฟล์ PDF",
+                data=f,
+                file_name="Risk_Analysis_Report.pdf",
+                mime="application/pdf"
+            )
+    except Exception as e:
+        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
 # --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
