@@ -34,12 +34,12 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters (เพิ่มตัวเลือกเดือน)
+# 2. Sidebar Filters (รวมตัวกรอง ปี, ไตรมาส, เดือน, ประเภทความเสี่ยง, หน่วยงาน)
 st.sidebar.header("เครื่องมือสืบค้น")
 year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
-# เพิ่มฟังก์ชันเลือกเดือน (แสดงชื่อเดือนเป็นภาษาไทยเพื่อให้ใช้งานง่าย)
+# เพิ่มฟังก์ชันเลือกเดือน (แสดงชื่อเดือนเป็นภาษาไทย)
 month_names = {
     1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
     5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม",
@@ -53,7 +53,7 @@ selected_months = [month_options[m] for m in selected_month_names]
 risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
 unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
 
-# กรองข้อมูลตามเงื่อนไขที่เลือก
+# กรองข้อมูลตามเงื่อนไขที่เลือกใน Sidebar
 df_f = df.copy()
 if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
 if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
