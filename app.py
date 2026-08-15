@@ -78,7 +78,6 @@ class PDFTableReport(FPDF):
         pass
 
 def generate_pdf_table(dataframe):
-    # ใช้ A4 แนวนอน (Landscape: 297 x 210 มม.) ขอบซ้ายขวา 11 มม. เหลือพื้นที่พิมพ์ 275 มม.
     pdf = PDFTableReport(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
@@ -98,7 +97,6 @@ def generate_pdf_table(dataframe):
     else:
         pdf.set_font("Arial", size=12)
 
-    # Title รายงาน
     pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด)", ln=True, align='C')
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
@@ -121,7 +119,6 @@ def generate_pdf_table(dataframe):
     
     col_widths = [9, 20, 22, 14, 28, 25, 11, 26, 28, 26, 28, 38] 
 
-    # วาดหัวตารางแบบ Multi-line ป้องกันตัวหนังสือทับกัน
     pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
@@ -264,7 +261,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ตั้งค่าตัวเลขแนวตรง textangle=0) ---
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -272,10 +269,13 @@ if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
     bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
     fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
+    fig_bar.update_traces(textangle=0, textposition='auto')  # บังคับตัวเลขให้ตั้งตรง
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
-    st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True), use_container_width=True)
+    fig_bar = px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True)
+    fig_bar.update_traces(textangle=0, textposition='auto')  # บังคับตัวเลขให้ตั้งตรง
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 # --- 2. ตารางสรุปสถิติอุบัติการณ์ ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
