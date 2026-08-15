@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
-import io
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -65,23 +64,15 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันส่งออกรายงานเป็น Excel (รองรับภาษาไทยสมบูรณ์) ---
+# --- ปุ่มดาวน์โหลดรายงาน CSV (รองรับภาษาไทยใน Excel) ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงาน")
-
-def to_excel(df_to_export):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_to_export.to_excel(writer, index=False, sheet_name='Risk_Data')
-    processed_data = output.getvalue()
-    return processed_data
-
-excel_data = to_excel(df_f)
+csv_data = df_f.to_csv(index=False).encode('utf-8-sig') # utf-8-sig ป้องกันภาษาไทยเพี้ยนใน Excel
 st.sidebar.download_button(
-    label="📥 ดาวน์โหลดรายงาน Excel",
-    data=excel_data,
-    file_name="Risk_Report.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    label="📥 ดาวน์โหลดรายงาน (CSV)",
+    data=csv_data,
+    file_name="Risk_Report.csv",
+    mime="text/csv",
 )
 
 # --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
