@@ -67,7 +67,7 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (ปรับลำดับคอลัมน์: นำการแก้ไขเบื้องต้นมาไว้ก่อนสาเหตุเกิดจาก) ---
+# --- ฟังก์ชันสร้างรายงาน PDF (ย้าย "การแก้ไขเบื้องต้น" ไปไว้หลัง "สาเหตุเกิดจาก") ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -97,7 +97,7 @@ def generate_pdf_table(dataframe):
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(1)
 
-    # ปรับลำดับ Header (ย้าย "การแก้ไขเบื้องต้น" มาไว้ก่อน "สาเหตุเกิดจาก (U)")
+    # ปรับลำดับ Header ให้ "การแก้ไขเบื้องต้น" อยู่หลัง "สาเหตุเกิดจาก (U)"
     headers = [
         "ลำดับ", 
         "วันที่เกิด", 
@@ -106,8 +106,8 @@ def generate_pdf_table(dataframe):
         "ความเสี่ยงที่เกิด", 
         "ปัญหาที่พบ (S)", 
         "LEVEL (T)", 
-        "การแก้ไขเบื้องต้น", 
         "สาเหตุเกิดจาก (U)", 
+        "การแก้ไขเบื้องต้น", 
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
@@ -154,7 +154,7 @@ def generate_pdf_table(dataframe):
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-        # จัดเรียงข้อมูลใน row_data ให้ตรงกับ headers ใหม่
+        # จัดเรียงข้อมูลใน row_data ให้ตรงกับ headers ใหม่ (การแก้ไขเบื้องต้น อยู่หลัง สาเหตุเกิดจาก)
         row_data = [
             str(idx+1),
             date_str,
@@ -163,8 +163,8 @@ def generate_pdf_table(dataframe):
             risk_desc,
             prob_val,
             level_val,
-            solve_val,  # ย้ายมาไว้ก่อนสาเหตุเกิดจาก
             cause_val,
+            solve_val,  # ย้ายมาไว้หลังสาเหตุเกิดจาก
             result_val,
             impact_val
         ]
