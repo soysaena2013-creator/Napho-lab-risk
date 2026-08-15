@@ -29,7 +29,7 @@ def get_sev_score(text):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (กำหนด ttl=0 และเพิ่มปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันที)
+# 1. โหลดข้อมูล (กำหนด ttl=0 และเพิ่มปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันทีแบบเรียลไทม์)
 @st.cache_data(ttl=0)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
@@ -72,7 +72,7 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (จัดลำดับคอลัมน์: การแก้ไขเบื้องต้น อยู่หลัง สาเหตุเกิดจาก) ---
+# --- ฟังก์ชันสร้างรายงาน PDF (เพิ่มคอลัมน์ "การแก้ไขปัญหาเฉพาะหน้า" ไว้หลัง "สาเหตุเกิดจาก") ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -97,7 +97,7 @@ def generate_pdf_table(dataframe):
         pdf.set_font("Arial", size=12)
 
     # Title หน้าแรก
-    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด S-X)", ln=True, align='C')
+    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด)", ln=True, align='C')
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(1)
@@ -111,11 +111,13 @@ def generate_pdf_table(dataframe):
         "ปัญหาที่พบ (S)", 
         "LEVEL (T)", 
         "สาเหตุเกิดจาก (U)", 
+        "การแก้ไขปัญหาเฉพาะหน้า",  # คอลัมน์ Z ที่เพิ่มเข้ามา
         "การแก้ไขเบื้องต้น", 
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    col_widths = [10, 21, 22, 15, 33, 29, 13, 29, 29, 37, 38] 
+    # ปรับสัดส่วนความกว้างคอลัมน์รวม 276 มม. ให้พอดีกับหน้ากระดาษแนวนอน A4
+    col_widths = [8, 19, 20, 14, 28, 25, 11, 25, 26, 25, 27, 28] 
 
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.set_fill_color(41, 128, 185)
@@ -145,13 +147,21 @@ def generate_pdf_table(dataframe):
         solve_val = str(row.get('การแก้ไขปัญหาเบื้องต้น', '-'))
         if solve_val == '-' or solve_val == 'nan':
             for col in dataframe.columns:
-                if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col):
+                if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col) and 'เฉพาะหน้า' not in str(col):
                     solve_val = str(row.get(col, '-'))
                     break
 
         prob_val = str(row.get('ปัญหาที่พบ', '-'))
         level_val = str(row.get('LEVEL', '-'))
         cause_val = str(row.get('สาเหตุเกิดจาก', '-'))
+        
+        # ดึงข้อมูลคอลัมน์ "การแก้ไขปัญหาเฉพาะหน้า" (คอลัมน์ Z)
+        immediate_fix_val = '-'
+        for col in dataframe.columns:
+            if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
+                immediate_fix_val = str(row.get(col, '-'))
+                break
+
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
@@ -164,6 +174,7 @@ def generate_pdf_table(dataframe):
             prob_val,
             level_val,
             cause_val,
+            immediate_fix_val,  # คอลัมน์ Z อยู่หลังสาเหตุเกิดจาก
             solve_val,  
             result_val,
             impact_val
@@ -202,7 +213,7 @@ def generate_pdf_table(dataframe):
         x_start = pdf.get_x()
         y_start = pdf.get_y()
 
-        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'C', 'L', 'L', 'L', 'L']
+        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'C', 'L', 'L', 'L', 'L', 'L']
 
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
