@@ -39,7 +39,7 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters (ตัวกรองเดิมของคุณครบถ้วน)
+# 2. Sidebar Filters
 st.sidebar.header("เครื่องมือสืบค้น")
 year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
@@ -57,7 +57,7 @@ selected_months = [month_options[m] for m in selected_month_names]
 risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
 unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
 
-# กรองข้อมูลตามเงื่อนไข
+# กรองข้อมูล
 df_f = df.copy()
 if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
 if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
@@ -67,25 +67,23 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF รูปแบบตาราง (รวมข้อมูลเดิมและ S-X ครบถ้วน) ---
+# --- ฟังก์ชันสร้างรายงาน PDF (รองรับ Multi-line ขยายแถวอัตโนมัติ ข้อมูลครบถ้วน) ---
 class PDFTableReport(FPDF):
     def header(self):
         if self.page_no() > 1:
             self.set_font("Sarabun", size=8)
-            self.cell(0, 5, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงรายหน่วยงาน - ต่อ)", ln=True, align='L')
+            self.cell(0, 5, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยง - ต่อ)", ln=True, align='L')
             self.ln(2)
 
 def generate_pdf_table(dataframe):
-    pdf = PDFTableReport(orientation='L', unit='mm', format='A4') # ใช้ A4 แนวนอน
+    pdf = PDFTableReport(orientation='L', unit='mm', format='A4') # A4 แนวนอน
     pdf.add_page()
     
-    # ดึงฟอนต์ Sarabun รองรับภาษาไทย
     font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
     font_path = "Sarabun-Regular.ttf"
     if not os.path.exists(font_path):
         import urllib.request
         try:
-            urllib.request.urllib.request.urlretrieve(font_url, font_path) if hasattr(urllib, 'request') else None
             urllib.request.urlretrieve(font_url, font_path)
         except:
             pass
@@ -96,15 +94,13 @@ def generate_pdf_table(dataframe):
     else:
         pdf.set_font("Arial", size=12)
 
-    # หัวข้อรายงาน
-    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงรายหน่วยงานและรายละเอียด S-X)", ln=True, align='C')
+    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด S-X ครบถ้วน)", ln=True, align='C')
     pdf.ln(2)
     
     pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
     pdf.cell(0, 6, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(3)
 
-    # กำหนดหัวข้อคอลัมน์และความกว้าง (รวม ~270 มม. พอดีหน้ากระดาษ A4 แนวนอน)
     headers = [
         "ลำดับ", 
         "วันที่เกิดความเสี่ยง", 
@@ -118,66 +114,91 @@ def generate_pdf_table(dataframe):
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    col_widths = [10, 20, 22, 18, 30, 28, 28, 12, 28, 27, 27]
+    col_widths = [10, 22, 24, 18, 30, 28, 28, 12, 28, 28, 28] # รวม 276 มม.
 
-    # พิมพ์ Header ของตาราง
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
-    pdf.set_fill_color(220, 230, 242) # สีพื้นหลังหัวตาราง
+    pdf.set_fill_color(220, 230, 242)
     
+    # พิมพ์ Header
+    header_height = 8
     for i, h in enumerate(headers):
-        pdf.cell(col_widths[i], 8, txt=h, border=1, align='C', fill=True)
+        pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
     pdf.ln()
 
-    # วนลูปข้อมูลใส่ตาราง
     pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
+
     for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
         unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
         shift_val = str(row.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
         
-        # ดึงความเสี่ยงที่เกิด (จากคอลัมน์ระบุความเสี่ยงย่อย)
         risk_desc = '-'
         for col in dataframe.columns:
             if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
                 risk_desc = str(row[col])
                 break
 
-        # ดึงการแก้ไขเบื้องต้น (จากฟิลด์เดิม)
-        solve_val = '-'
-        for col in dataframe.columns:
-            if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col):
-                solve_val = str(row.get(col, '-'))
-                break
+        solve_val = str(row.get('การแก้ไขปัญหาเบื้องต้น', '-'))
+        if solve_val == '-' or solve_val == 'nan':
+            for col in dataframe.columns:
+                if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col):
+                    solve_val = str(row.get(col, '-'))
+                    break
 
-        # ดึงข้อมูลจากคอลัมน์ S ถึง X เพิ่มเติม
         prob_val = str(row.get('ปัญหาที่พบ', '-'))
         level_val = str(row.get('LEVEL', '-'))
         cause_val = str(row.get('สาเหตุเกิดจาก', '-'))
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-        # ตรวจสอบความสูงหน้ากระดาษ เพื่อขึ้นหน้าใหม่หากหน้าเต็ม
-        if pdf.get_y() > 185:
+        row_data = [
+            str(idx+1),
+            date_str,
+            unit_name,
+            shift_val,
+            risk_desc,
+            solve_val,
+            prob_val,
+            level_val,
+            cause_val,
+            result_val,
+            impact_val
+        ]
+
+        # คำนวณความสูงแถวจากข้อความที่ยาวที่สุด เพื่อให้แสดงครบทุกบรรทัด
+        line_counts = []
+        for i, text in enumerate(row_data):
+            w = col_widths[i]
+            # ประมาณการจำนวนบรรทัดจากความยาวข้อความและความกว้างคอลัมน์
+            chars_per_line = max(int(w / 2.2), 4)
+            lines = max(1, int(len(text) / chars_per_line) + text.count('\n'))
+            line_counts.append(lines)
+        
+        max_lines = max(line_counts)
+        row_height = max(5.5, max_lines * 4.2)
+
+        # ขึ้นหน้าใหม่หากพื้นที่ไม่พอ
+        if pdf.get_y() + row_height > 190:
             pdf.add_page()
             pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
             for i, h in enumerate(headers):
-                pdf.cell(col_widths[i], 8, txt=h, border=1, align='C', fill=True)
+                pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
             pdf.ln()
             pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
 
-        # พิมพ์แถวข้อมูลลงตาราง (ตัดข้อความให้พอดีเซลล์)
-        pdf.cell(col_widths[0], 6, txt=str(idx+1), border=1, align='C')
-        pdf.cell(col_widths[1], 6, txt=date_str, border=1, align='C')
-        pdf.cell(col_widths[2], 6, txt=unit_name[:14], border=1, align='L')
-        pdf.cell(col_widths[3], 6, txt=shift_val[:12], border=1, align='C')
-        pdf.cell(col_widths[4], 6, txt=risk_desc[:20], border=1, align='L')
-        pdf.cell(col_widths[5], 6, txt=solve_val[:18], border=1, align='L')
-        pdf.cell(col_widths[6], 6, txt=prob_val[:18], border=1, align='L')
-        pdf.cell(col_widths[7], 6, txt=level_val[:8], border=1, align='C')
-        pdf.cell(col_widths[8], 6, txt=cause_val[:18], border=1, align='L')
-        pdf.cell(col_widths[9], 6, txt=result_val[:18], border=1, align='L')
-        pdf.cell(col_widths[10], 6, txt=impact_val[:18], border=1, align='L')
-        pdf.ln()
+        # บันทึกตำแหน่ง Y ปัจจุบัน
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+
+        # พิมพ์แต่ละเซลล์ด้วย MultiCell เพื่อให้ข้อความตัดบรรทัดและแสดงครบถ้วน
+        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'L', 'C', 'L', 'L', 'L']
+        for i, text in enumerate(row_data):
+            x_current = pdf.get_x()
+            pdf.multi_cell(col_widths[i], 4.2, txt=text if text != 'nan' else '-', border=1, align=alignments[i])
+            pdf.set_xy(x_current + col_widths[i], y_start)
+
+        pdf.set_xy(x_start, y_start + row_height)
+        pdf.ln(0)
 
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_file.name)
@@ -185,56 +206,44 @@ def generate_pdf_table(dataframe):
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงาน")
-if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (ตารางครบถ้วน + S-X)"):
+if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (ข้อมูลครบถ้วน + จัดเต็มบรรทัด)"):
     try:
         pdf_path = generate_pdf_table(df_f)
         with open(pdf_path, "rb") as f:
             st.sidebar.download_button(
                 label="คลิกเพื่อบันทึกไฟล์ PDF",
                 data=f,
-                file_name="Risk_Full_Report.pdf",
+                file_name="Risk_Full_Report_Complete.pdf",
                 mime="application/pdf"
             )
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ ---
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
-
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
     bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
-    
-    fig_bar = px.bar(
-        bar_df, 
-        x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
-        y='count', 
-        color=col_name, 
-        barmode='group', 
-        text_auto=True
-    )
+    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
     st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True), use_container_width=True)
 
-# --- 2. ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss) ---
+# --- 2. ตารางสรุปสถิติอุบัติการณ์ ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
-
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
     stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
-    
     for col in stats_df.columns:
         if col != 'รวม':
             stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
-            
     st.dataframe(stats_df, use_container_width=True)
 else:
-    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' ในไฟล์ หรือไม่มีข้อมูลในช่วงที่เลือก")
+    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์'")
 
 # --- 3. ส่วนคำนวณ Risk Matrix ---
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
@@ -255,7 +264,6 @@ if not melted.empty:
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
-    
     matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
     st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
@@ -263,28 +271,17 @@ if not melted.empty:
     display_df = matrix_df.copy()
     display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
     
-    st.dataframe(
-        display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']], 
-        use_container_width=True, 
-        hide_index=True
-    )
+    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
     
     st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
     matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
     matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
 
     fig = px.scatter(
-        matrix_df, 
-        x='x_jitter', 
-        y='y_jitter', 
-        size='Frequency', 
-        color='Risk_Matrix',
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
         color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-        hover_name='Risk_Detail', 
-        range_x=[0.5, 4.5], 
-        range_y=[0.5, 4.5]
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5]
     )
     st.plotly_chart(fig, use_container_width=True)
-
 else:
     st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
