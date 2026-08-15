@@ -67,22 +67,18 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF รองรับภาษาไทย (ใช้ fpdf2) ---
+# --- ฟังก์ชันสร้างรายงาน PDF รายละเอียดครบถ้วนตามต้องการ ---
 class ThaiPDF(FPDF):
     def header(self):
-        # สามารถใส่หัวกระดาษได้ที่นี่หากต้องการ
         pass
 
 def generate_pdf(dataframe):
-    pdf = ThaiPDF()
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # ใช้ฟอนต์มาตรฐานยุโรปหรือเพิ่มฟอนต์ Unicode ที่รองรับไทย
-    # FPDF2 มีระบบจัดการฟอนต์เบื้องต้น หรือใช้ฟอนต์ Arial (หากเครื่องรองรับ)
-    # เพื่อความปลอดภัยสูงสุดในการแสดงผลภาษาไทยบน Cloud เราจะใช้ฟอนต์ DejaVu หรือฟอนต์มาตรฐานที่รองรับ Unicode
+    # ดึงฟอนต์ Sarabun รองรับภาษาไทย
     font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
     font_path = "Sarabun-Regular.ttf"
-    
     if not os.path.exists(font_path):
         import urllib.request
         try:
@@ -92,29 +88,48 @@ def generate_pdf(dataframe):
 
     if os.path.exists(font_path):
         pdf.add_font("Sarabun", "", font_path)
-        pdf.set_font("Sarabun", size=16)
+        pdf.set_font("Sarabun", size=14)
     else:
         pdf.set_font("Arial", size=12)
 
     # หัวข้อรายงาน
-    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report", ln=True, align='C')
-    pdf.ln(5)
+    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report (รายหน่วยงาน)", ln=True, align='C')
+    pdf.ln(3)
     
-    pdf.set_font("Sarabun", size=14) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+    pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
     pdf.cell(0, 8, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
-    pdf.ln(5)
+    pdf.ln(3)
 
-    pdf.cell(0, 8, txt="Summary Data List:", ln=True, align='L')
-    
-    # วนลูปแสดงข้อมูลตัวอย่างใน PDF (แสดงหน่วยงานและวันที่)
-    for idx, row in dataframe.head(30).iterrows():
+    # วนลูปดึงข้อมูลตามฟิลด์ที่คุณต้องการ
+    for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
-        dept = str(row['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'])
-        text_line = f"- [{date_str}] หน่วยงาน: {dept}"
-        try:
-            pdf.cell(0, 7, txt=text_line, ln=True, align='L')
-        except UnicodeEncodeError:
-            pass # ข้ามบรรทัดที่มีปัญหาตัวอักษรพิเศษ
+        unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+        
+        # ค้นหาชื่อฟิลด์ใกล้เคียงสำหรับรายละเอียดความเสี่ยง ช่วงเวร และการแก้ไขเบื้องต้น
+        risk_desc = '-'
+        for col in dataframe.columns:
+            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
+                risk_desc = str(row[col])
+                break
+        
+        shift_val = '-'
+        for col in dataframe.columns:
+            if any(k in str(col) for k in ['เวร', 'ช่วงเวลา', 'Shift']):
+                shift_val = str(row.get(col, '-'))
+                break
+
+        solve_val = '-'
+        for col in dataframe.columns:
+            if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']):
+                solve_val = str(row.get(col, '-'))
+                break
+
+        # พิมพ์ข้อมูลลง PDF
+        pdf.set_font("Sarabun", size=11)
+        pdf.cell(0, 6, txt=f"[{idx+1}] วันที่: {date_str} | หน่วยงาน: {unit_name} | เวร: {shift_val}", ln=True)
+        pdf.cell(0, 6, txt=f"    - ความเสี่ยงที่เกิด: {risk_desc}", ln=True)
+        pdf.cell(0, 6, txt=f"    - แก้ไขเบื้องต้น: {solve_val}", ln=True)
+        pdf.ln(2)
 
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_file.name)
