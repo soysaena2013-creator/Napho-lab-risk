@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from fpdf import FPDF
-import tempfile
-import os
+import io
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -67,51 +65,24 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF สำหรับวิเคราะห์ ---
-def generate_pdf_report(dataframe):
-    pdf = FPDF()
-    pdf.add_page()
-    
-    font_path = "THSarabunNew.ttf"
-    if os.path.exists(font_path):
-        pdf.add_font("THSarabun", "", font_path)
-        pdf.set_font("THSarabun", size=16)
-    else:
-        pdf.set_font("Arial", size=12)
-
-    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report", ln=True, align='C')
-    pdf.ln(5)
-    
-    pdf.set_font("THSarabun", size=14) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-    pdf.cell(0, 8, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
-    pdf.ln(5)
-
-    pdf.cell(0, 8, txt="Summary by Department:", ln=True, align='L')
-    matched_cols = [c for c in dataframe.columns if 'รูปแบบเหตุการณ์' in str(c)]
-    if matched_cols and not dataframe.empty:
-        col_name = matched_cols[0]
-        summary_df = dataframe.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='Count')
-        for index, row in summary_df.iterrows():
-            pdf.cell(0, 7, txt=f"- [{row['4.หน่วยงานที่ทำให้เกิดความเสี่ยง']}] {row[col_name]}: {row['Count']} cases", ln=True, align='L')
-
-    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(tmp_file.name)
-    return tmp_file.name
-
+# --- ฟังก์ชันส่งออกรายงานเป็น Excel (รองรับภาษาไทยสมบูรณ์) ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงาน")
-if st.sidebar.button("ดาวน์โหลดรายงาน PDF"):
-    try:
-        pdf_path = generate_pdf_report(df_f)
-        with open(pdf_path, "rb") as f:
-            st.sidebar.download_button(
-                label="📥 คลิกดาวน์โหลดไฟล์ PDF",
-                data=f,
-                file_name="Risk_Analysis_Report.pdf",
-                mime="application/pdf"
-            )
-    except Exception as e:
-        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
+
+def to_excel(df_to_export):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_to_export.to_excel(writer, index=False, sheet_name='Risk_Data')
+    processed_data = output.getvalue()
+    return processed_data
+
+excel_data = to_excel(df_f)
+st.sidebar.download_button(
+    label="📥 ดาวน์โหลดรายงาน Excel",
+    data=excel_data,
+    file_name="Risk_Report.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
 # --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
