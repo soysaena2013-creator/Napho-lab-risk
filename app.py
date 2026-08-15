@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+from fpdf import FPDF
+import tempfile
+import os
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -36,7 +39,7 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters (รวมตัวกรอง ปี, ไตรมาส, เดือน, ประเภทความเสี่ยง, หน่วยงาน)
+# 2. Sidebar Filters
 st.sidebar.header("เครื่องมือสืบค้น")
 year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
@@ -54,7 +57,7 @@ selected_months = [month_options[m] for m in selected_month_names]
 risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
 unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
 
-# กรองข้อมูลตามเงื่อนไขที่เลือกใน Sidebar
+# กรองข้อมูล
 df_f = df.copy()
 if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
 if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
@@ -64,27 +67,54 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ปุ่มดาวน์โหลดข้อมูลที่กรองแล้วเป็น CSV (เปิดใน Excel ได้ทันที) ---
+# --- ฟังก์ชันสร้าง PDF (ใช้ fpdf2 รองรับภาษาไทย) ---
+def generate_pdf(dataframe):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # ดาวน์โหลดและเพิ่มฟอนต์ TH Sarabun PSK (หรือใช้ฟอนต์มาตรฐานรองรับ Unicode)
+    # ใช้ฟอนต์ DejaVuSans หรือ Tahoma ที่รองรับภาษาไทยเบื้องต้น หรือดึงฟอนต์มาไว้ในโปรเจกต์
+    # ตัวอย่างนี้ใช้ฟอนต์มาตรฐานระบบ FPDF2 (รบกวนวางไฟล์ .ttf เช่น Angsana.ttf หรือ THSarabunNew.ttf ไว้ที่เดียวกัน)
+    font_path = "THSarabunNew.ttf"
+    if os.path.exists(font_path):
+        pdf.add_font("THSarabun", "", font_path)
+        pdf.set_font("THSarabun", size=16)
+    else:
+        pdf.set_font("Arial", size=12) # สำรองกรณีไม่มีไฟล์ฟอนต์
+
+    pdf.cell(200, 10, txt="Hospital Risk Incident Summary Report", ln=True, align='C')
+    pdf.ln(10)
+    
+    total_records = len(dataframe)
+    pdf.cell(200, 10, txt=f"Total Records Filtered: {total_records}", ln=True, align='L')
+    
+    # สร้างไฟล์ชั่วคราว
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(tmp_file.name)
+    return tmp_file.name
+
 st.sidebar.markdown("---")
-st.sidebar.subheader("ส่งออกข้อมูล")
-csv_data = df_f.to_csv(index=False).encode('utf-8-sig') # ใช้ utf-8-sig เพื่อให้เปิดภาษาไทยใน Excel ได้ไม่เพี้ยน
-st.sidebar.download_button(
-    label="📥 ดาวน์โหลดข้อมูลที่กรอง (CSV)",
-    data=csv_data,
-    file_name="filtered_risk_data.csv",
-    mime="text/csv",
-)
+st.sidebar.subheader("ออกรายงาน")
+if st.sidebar.button("สร้างไฟล์รายงาน PDF"):
+    try:
+        pdf_path = generate_pdf(df_f)
+        with open(pdf_path, "rb") as f:
+            st.sidebar.download_button(
+                label="📥 ดาวน์โหลด PDF",
+                data=f,
+                file_name="risk_report.pdf",
+                mime="application/pdf"
+            )
+    except Exception as e:
+        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (Miss vs Near Miss) ---
+# --- แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ ---
 st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
-
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
-    
     bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
-    
     fig_bar = px.bar(
         bar_df, 
         x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
@@ -98,9 +128,8 @@ else:
     unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
     st.plotly_chart(px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True), use_container_width=True)
 
-# --- ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss) ---
+# --- ตารางสรุปสถิติอุบัติการณ์ ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
-
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
     stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().unstack(fill_value=0)
@@ -114,7 +143,7 @@ if matched_cols and not df_f.empty:
 else:
     st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์' ในไฟล์ หรือไม่มีข้อมูลในช่วงที่เลือก")
 
-# --- เริ่มต้นส่วนคำนวณ Risk Matrix ---
+# --- ส่วนคำนวณ Risk Matrix ---
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 melted = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
 melted = melted[melted['Risk_Detail'] != '']
