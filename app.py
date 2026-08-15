@@ -29,7 +29,7 @@ def get_sev_score(text):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (กำหนด ttl=0 และเพิ่มปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันทีแบบเรียลไทม์)
+# 1. โหลดข้อมูล (กำหนด ttl=0 และปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันที)
 @st.cache_data(ttl=0)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
@@ -72,13 +72,16 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (เพิ่มคอลัมน์ "การแก้ไขปัญหาเฉพาะหน้า" ไว้หลัง "สาเหตุเกิดจาก") ---
+# --- ฟังก์ชันสร้างรายงาน PDF (จัดสัดส่วนตารางและป้องกันข้อความทับซ้อน) ---
 class PDFTableReport(FPDF):
     def header(self):
+        # ตั้งค่าหัวกระดาษระยะปลอดภัย
         pass
 
 def generate_pdf_table(dataframe):
-    pdf = PDFTableReport(orientation='L', unit='mm', format='A4') # A4 แนวนอน
+    # ใช้ A4 แนวนอน (Landscape: 297 x 210 มม.) ขอบซ้ายขวา 11 มม. เหลือพื้นที่พิมพ์ 275 มม.
+    pdf = PDFTableReport(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
     font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
@@ -96,11 +99,11 @@ def generate_pdf_table(dataframe):
     else:
         pdf.set_font("Arial", size=12)
 
-    # Title หน้าแรก
+    # Title รายงาน
     pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด)", ln=True, align='C')
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
-    pdf.ln(1)
+    pdf.ln(2)
 
     headers = [
         "ลำดับ", 
@@ -111,25 +114,26 @@ def generate_pdf_table(dataframe):
         "ปัญหาที่พบ (S)", 
         "LEVEL (T)", 
         "สาเหตุเกิดจาก (U)", 
-        "การแก้ไขปัญหาเฉพาะหน้า",  # คอลัมน์ Z ที่เพิ่มเข้ามา
+        "การแก้ไขปัญหาเฉพาะหน้า",  # คอลัมน์ Z
         "การแก้ไขเบื้องต้น", 
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    # ปรับสัดส่วนความกว้างคอลัมน์รวม 276 มม. ให้พอดีกับหน้ากระดาษแนวนอน A4
-    col_widths = [8, 19, 20, 14, 28, 25, 11, 25, 26, 25, 27, 28] 
+    
+    # กำหนดความกว้างคอลัมน์รวมกันพอดี 275 มม. ไม่ให้ล้นและไม่ทับกัน
+    col_widths = [9, 20, 22, 14, 28, 25, 11, 26, 28, 26, 28, 38] 
 
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
     
-    header_height = 7
+    header_height = 8
     for i, h in enumerate(headers):
         pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
     pdf.ln()
 
     pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7.5)
+    pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
 
     line_height = 3.5 
 
@@ -155,7 +159,6 @@ def generate_pdf_table(dataframe):
         level_val = str(row.get('LEVEL', '-'))
         cause_val = str(row.get('สาเหตุเกิดจาก', '-'))
         
-        # ดึงข้อมูลคอลัมน์ "การแก้ไขปัญหาเฉพาะหน้า" (คอลัมน์ Z)
         immediate_fix_val = '-'
         for col in dataframe.columns:
             if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
@@ -174,19 +177,20 @@ def generate_pdf_table(dataframe):
             prob_val,
             level_val,
             cause_val,
-            immediate_fix_val,  # คอลัมน์ Z อยู่หลังสาเหตุเกิดจาก
+            immediate_fix_val,  
             solve_val,  
             result_val,
             impact_val
         ]
 
+        # คำนวณความสูงแถวตามจำนวนบรรทัดของข้อความที่ยาวที่สุด เพื่อป้องกันข้อความทับซ้อน
         max_lines = 1
         for i, text in enumerate(row_data):
             w = col_widths[i]
-            txt_clean = text if text != 'nan' else '-'
-            chars_per_line = max(int(w / 1.8), 3)
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
+            chars_per_line = max(int(w / 1.7), 3)
             lines = 0
-            for paragraph in txt_clean.split('\n'):
+            for paragraph in str(txt_clean).split('\n'):
                 if len(paragraph) == 0:
                     lines += 1
                 else:
@@ -194,8 +198,9 @@ def generate_pdf_table(dataframe):
             if lines > max_lines:
                 max_lines = lines
 
-        row_height = max(5.0, (max_lines * line_height) + 2.0)
+        row_height = max(6.0, (max_lines * line_height) + 2.5)
 
+        # ตรวจสอบพื้นที่หน้ากระดาษ หากไม่พอให้ขึ้นหน้าใหม่พร้อมพิมพ์หัวตารางซ้ำ
         if pdf.get_y() + row_height > 195:
             pdf.add_page()
             pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
@@ -205,7 +210,7 @@ def generate_pdf_table(dataframe):
                 pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
             pdf.ln()
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7.5)
+            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
 
         is_even = (idx % 2 == 0)
         pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
@@ -217,11 +222,11 @@ def generate_pdf_table(dataframe):
 
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
-            txt_clean = text if text != 'nan' else '-'
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
             
             pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
             pdf.set_xy(x_current, y_start + 1.0)
-            pdf.multi_cell(col_widths[i], line_height, txt=txt_clean, border=0, align=alignments[i])
+            pdf.multi_cell(col_widths[i], line_height, txt=str(txt_clean), border=0, align=alignments[i])
             
             pdf.set_xy(x_current + col_widths[i], y_start)
 
