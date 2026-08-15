@@ -67,7 +67,7 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (รองรับ Multi-line ขยายแถวอัตโนมัติ ข้อมูลครบถ้วน) ---
+# --- ฟังก์ชันสร้างรายงาน PDF (ปรับแต่งแถวให้สูงเท่ากันทั้งแถว สวยงาม มืออาชีพ) ---
 class PDFTableReport(FPDF):
     def header(self):
         if self.page_no() > 1:
@@ -90,20 +90,19 @@ def generate_pdf_table(dataframe):
 
     if os.path.exists(font_path):
         pdf.add_font("Sarabun", "", font_path)
-        pdf.set_font("Sarabun", size=13)
+        pdf.set_font("Sarabun", size=14)
     else:
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("Arial", size=14)
 
-    pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด S-X ครบถ้วน)", ln=True, align='C')
-    pdf.ln(2)
-    
-    pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+    # Title
+    pdf.cell(0, 8, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด S-X)", ln=True, align='C')
+    pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
     pdf.cell(0, 6, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
-    pdf.ln(3)
+    pdf.ln(2)
 
     headers = [
         "ลำดับ", 
-        "วันที่เกิดความเสี่ยง", 
+        "วันที่เกิด", 
         "หน่วยงาน", 
         "ช่วงเวร", 
         "ความเสี่ยงที่เกิด", 
@@ -114,18 +113,24 @@ def generate_pdf_table(dataframe):
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    col_widths = [10, 22, 24, 18, 30, 28, 28, 12, 28, 28, 28] # รวม 276 มม.
+    # สัดส่วนความกว้างคอลัมน์รวม 276 มม. (พอดีหน้า A4 แนวนอน)
+    col_widths = [12, 22, 24, 16, 32, 30, 30, 14, 28, 34, 34] 
 
-    pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
-    pdf.set_fill_color(220, 230, 242)
+    # Header Styling (สีน้ำเงินเข้ม ตัวอักษรขาว)
+    pdf.set_font("Sarabun", size=8.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8.5)
+    pdf.set_fill_color(41, 128, 185)
+    pdf.set_text_color(255, 255, 255)
     
-    # พิมพ์ Header
     header_height = 8
     for i, h in enumerate(headers):
         pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
     pdf.ln()
 
+    # Reset text color for data
+    pdf.set_text_color(0, 0, 0)
     pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
+
+    line_height = 4.0 
 
     for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
@@ -165,40 +170,59 @@ def generate_pdf_table(dataframe):
             impact_val
         ]
 
-        # คำนวณความสูงแถวจากข้อความที่ยาวที่สุด เพื่อให้แสดงครบทุกบรรทัด
-        line_counts = []
+        # คำนวณความสูงสูงสุดในแถวเพื่อให้ทุกคอลัมน์ขยายเท่ากันทั้งแถว
+        max_lines = 1
         for i, text in enumerate(row_data):
             w = col_widths[i]
-            # ประมาณการจำนวนบรรทัดจากความยาวข้อความและความกว้างคอลัมน์
-            chars_per_line = max(int(w / 2.2), 4)
-            lines = max(1, int(len(text) / chars_per_line) + text.count('\n'))
-            line_counts.append(lines)
-        
-        max_lines = max(line_counts)
-        row_height = max(5.5, max_lines * 4.2)
+            txt_clean = text if text != 'nan' else '-'
+            chars_per_line = max(int(w / 2.1), 3)
+            lines = 0
+            for paragraph in txt_clean.split('\n'):
+                if len(paragraph) == 0:
+                    lines += 1
+                else:
+                    lines += max(1, -(-len(paragraph) // chars_per_line))
+            if lines > max_lines:
+                max_lines = lines
+
+        row_height = max(6.0, (max_lines * line_height) + 2.5)
 
         # ขึ้นหน้าใหม่หากพื้นที่ไม่พอ
-        if pdf.get_y() + row_height > 190:
+        if pdf.get_y() + row_height > 195:
             pdf.add_page()
-            pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
+            pdf.set_font("Sarabun", size=8.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8.5)
+            pdf.set_fill_color(41, 128, 185)
+            pdf.set_text_color(255, 255, 255)
             for i, h in enumerate(headers):
                 pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
             pdf.ln()
+            pdf.set_text_color(0, 0, 0)
             pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
 
-        # บันทึกตำแหน่ง Y ปัจจุบัน
+        # สลับสีพื้นหลังแถว (Zebra Striping)
+        is_even = (idx % 2 == 0)
+        pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
+
         x_start = pdf.get_x()
         y_start = pdf.get_y()
 
-        # พิมพ์แต่ละเซลล์ด้วย MultiCell เพื่อให้ข้อความตัดบรรทัดและแสดงครบถ้วน
         alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'L', 'C', 'L', 'L', 'L']
+
+        # พิมพ์ทุกคอลัมน์ให้มีความสูงเท่ากันทั้งแถว
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
-            pdf.multi_cell(col_widths[i], 4.2, txt=text if text != 'nan' else '-', border=1, align=alignments[i])
+            txt_clean = text if text != 'nan' else '-'
+            
+            # วาดกรอบและพื้นหลังให้เต็มความสูงแถวก่อน
+            pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
+            
+            # พิมพ์ข้อความซ้อนลงไป
+            pdf.set_xy(x_current, y_start + 1.2)
+            pdf.multi_cell(col_widths[i], line_height, txt=txt_clean, border=0, align=alignments[i])
+            
             pdf.set_xy(x_current + col_widths[i], y_start)
 
         pdf.set_xy(x_start, y_start + row_height)
-        pdf.ln(0)
 
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_file.name)
