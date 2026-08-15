@@ -29,8 +29,8 @@ def get_sev_score(text):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล
-@st.cache_data
+# 1. โหลดข้อมูล (กำหนด ttl=0 และเพิ่มปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันที)
+@st.cache_data(ttl=0)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
     df = pd.read_csv(url)
@@ -39,8 +39,13 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters
+# 2. Sidebar Filters & Controls
 st.sidebar.header("เครื่องมือสืบค้น")
+
+if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
+    st.cache_data.clear()
+    st.rerun()
+
 year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
@@ -67,7 +72,7 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (ย้าย "การแก้ไขเบื้องต้น" ไปไว้หลัง "สาเหตุเกิดจาก") ---
+# --- ฟังก์ชันสร้างรายงาน PDF (จัดลำดับคอลัมน์: การแก้ไขเบื้องต้น อยู่หลัง สาเหตุเกิดจาก) ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -97,7 +102,6 @@ def generate_pdf_table(dataframe):
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(1)
 
-    # ปรับลำดับ Header ให้ "การแก้ไขเบื้องต้น" อยู่หลัง "สาเหตุเกิดจาก (U)"
     headers = [
         "ลำดับ", 
         "วันที่เกิด", 
@@ -111,10 +115,8 @@ def generate_pdf_table(dataframe):
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    # ปรับสัดส่วนความกว้างคอลัมน์รวม 276 มม. ให้สอดคล้องกับลำดับใหม่
     col_widths = [10, 21, 22, 15, 33, 29, 13, 29, 29, 37, 38] 
 
-    # Header Styling
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
@@ -124,7 +126,6 @@ def generate_pdf_table(dataframe):
         pdf.cell(col_widths[i], header_height, txt=h, border=1, align='C', fill=True)
     pdf.ln()
 
-    # Reset text color for data
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7.5)
 
@@ -154,7 +155,6 @@ def generate_pdf_table(dataframe):
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-        # จัดเรียงข้อมูลใน row_data ให้ตรงกับ headers ใหม่ (การแก้ไขเบื้องต้น อยู่หลัง สาเหตุเกิดจาก)
         row_data = [
             str(idx+1),
             date_str,
@@ -164,12 +164,11 @@ def generate_pdf_table(dataframe):
             prob_val,
             level_val,
             cause_val,
-            solve_val,  # ย้ายมาไว้หลังสาเหตุเกิดจาก
+            solve_val,  
             result_val,
             impact_val
         ]
 
-        # คำนวณความสูงสูงสุดในแถวเพื่อให้ทุกคอลัมน์ขยายเท่ากันทั้งแถว
         max_lines = 1
         for i, text in enumerate(row_data):
             w = col_widths[i]
@@ -186,7 +185,6 @@ def generate_pdf_table(dataframe):
 
         row_height = max(5.0, (max_lines * line_height) + 2.0)
 
-        # จัดการพื้นที่หน้ากระดาษอัตโนมัติ
         if pdf.get_y() + row_height > 195:
             pdf.add_page()
             pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
@@ -198,7 +196,6 @@ def generate_pdf_table(dataframe):
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7.5)
 
-        # สลับสีพื้นหลังแถว (Zebra Striping)
         is_even = (idx % 2 == 0)
         pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
 
@@ -207,7 +204,6 @@ def generate_pdf_table(dataframe):
 
         alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'C', 'L', 'L', 'L', 'L']
 
-        # พิมพ์ทุกคอลัมน์ให้มีความสูงเท่ากันทั้งแถว
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
             txt_clean = text if text != 'nan' else '-'
