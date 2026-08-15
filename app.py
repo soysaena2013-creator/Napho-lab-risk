@@ -67,11 +67,11 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF รูปแบบตาราง (เพิ่มคอลัมน์ S ถึง X) ---
+# --- ฟังก์ชันสร้างรายงาน PDF รูปแบบตาราง (รวมข้อมูลเดิมและ S-X ครบถ้วน) ---
 class PDFTableReport(FPDF):
     def header(self):
         if self.page_no() > 1:
-            self.set_font("Sarabun", size=9)
+            self.set_font("Sarabun", size=8)
             self.cell(0, 5, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงรายหน่วยงาน - ต่อ)", ln=True, align='L')
             self.ln(2)
 
@@ -85,13 +85,14 @@ def generate_pdf_table(dataframe):
     if not os.path.exists(font_path):
         import urllib.request
         try:
+            urllib.request.urllib.request.urlretrieve(font_url, font_path) if hasattr(urllib, 'request') else None
             urllib.request.urlretrieve(font_url, font_path)
         except:
             pass
 
     if os.path.exists(font_path):
         pdf.add_font("Sarabun", "", font_path)
-        pdf.set_font("Sarabun", size=14)
+        pdf.set_font("Sarabun", size=13)
     else:
         pdf.set_font("Arial", size=12)
 
@@ -99,17 +100,28 @@ def generate_pdf_table(dataframe):
     pdf.cell(0, 10, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงรายหน่วยงานและรายละเอียด S-X)", ln=True, align='C')
     pdf.ln(2)
     
-    pdf.set_font("Sarabun", size=11) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+    pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
     pdf.cell(0, 6, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
-    pdf.ln(4)
+    pdf.ln(3)
 
-    # กำหนดหัวข้อคอลัมน์และความกว้าง (รวม ~277 มม. พอดีหน้ากระดาษ A4 แนวนอน)
-    # คอลัมน์ประกอบด้วย: ลำดับ | วันที่ | หน่วยงาน | ช่วงเวร | ปัญหาที่พบ (S) | LEVEL (T) | สาเหตุเกิดจาก (U) | การแก้ไขเบื้องต้น (V) | ผลการแก้ไข (W) | ผลกระทบต่อคนไข้ (X)
-    col_widths = [12, 22, 25, 20, 38, 15, 38, 35, 36, 36]
-    headers = ["ลำดับ", "วันที่", "หน่วยงาน", "ช่วงเวร", "ปัญหาที่พบ", "LEVEL", "สาเหตุเกิดจาก", "การแก้ไขเบื้องต้น", "ผลการแก้ไข", "ผลกระทบต่อคนไข้"]
+    # กำหนดหัวข้อคอลัมน์และความกว้าง (รวม ~270 มม. พอดีหน้ากระดาษ A4 แนวนอน)
+    headers = [
+        "ลำดับ", 
+        "วันที่เกิดความเสี่ยง", 
+        "หน่วยงาน", 
+        "ช่วงเวร", 
+        "ความเสี่ยงที่เกิด", 
+        "การแก้ไขเบื้องต้น", 
+        "ปัญหาที่พบ (S)", 
+        "LEVEL (T)", 
+        "สาเหตุเกิดจาก (U)", 
+        "ผลการแก้ไข (W)", 
+        "ผลกระทบต่อคนไข้ (X)"
+    ]
+    col_widths = [10, 20, 22, 18, 30, 28, 28, 12, 28, 27, 27]
 
     # พิมพ์ Header ของตาราง
-    pdf.set_font("Sarabun", size=9)
+    pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.set_fill_color(220, 230, 242) # สีพื้นหลังหัวตาราง
     
     for i, h in enumerate(headers):
@@ -117,40 +129,54 @@ def generate_pdf_table(dataframe):
     pdf.ln()
 
     # วนลูปข้อมูลใส่ตาราง
-    pdf.set_font("Sarabun", size=8)
+    pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
         unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
         shift_val = str(row.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
         
-        # ดึงข้อมูลจากคอลัมน์ S ถึง X ตามชื่อฟิลด์จริง
+        # ดึงความเสี่ยงที่เกิด (จากคอลัมน์ระบุความเสี่ยงย่อย)
+        risk_desc = '-'
+        for col in dataframe.columns:
+            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
+                risk_desc = str(row[col])
+                break
+
+        # ดึงการแก้ไขเบื้องต้น (จากฟิลด์เดิม)
+        solve_val = '-'
+        for col in dataframe.columns:
+            if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col):
+                solve_val = str(row.get(col, '-'))
+                break
+
+        # ดึงข้อมูลจากคอลัมน์ S ถึง X เพิ่มเติม
         prob_val = str(row.get('ปัญหาที่พบ', '-'))
         level_val = str(row.get('LEVEL', '-'))
         cause_val = str(row.get('สาเหตุเกิดจาก', '-'))
-        solve_val = str(row.get('การแก้ไขปัญหาเบื้องต้น', '-'))
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
         # ตรวจสอบความสูงหน้ากระดาษ เพื่อขึ้นหน้าใหม่หากหน้าเต็ม
         if pdf.get_y() > 185:
             pdf.add_page()
-            pdf.set_font("Sarabun", size=9)
+            pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
             for i, h in enumerate(headers):
                 pdf.cell(col_widths[i], 8, txt=h, border=1, align='C', fill=True)
             pdf.ln()
-            pdf.set_font("Sarabun", size=8)
+            pdf.set_font("Sarabun", size=7.5) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
 
         # พิมพ์แถวข้อมูลลงตาราง (ตัดข้อความให้พอดีเซลล์)
         pdf.cell(col_widths[0], 6, txt=str(idx+1), border=1, align='C')
         pdf.cell(col_widths[1], 6, txt=date_str, border=1, align='C')
-        pdf.cell(col_widths[2], 6, txt=unit_name[:15], border=1, align='L')
+        pdf.cell(col_widths[2], 6, txt=unit_name[:14], border=1, align='L')
         pdf.cell(col_widths[3], 6, txt=shift_val[:12], border=1, align='C')
-        pdf.cell(col_widths[4], 6, txt=prob_val[:22], border=1, align='L')
-        pdf.cell(col_widths[5], 6, txt=level_val[:8], border=1, align='C')
-        pdf.cell(col_widths[6], 6, txt=cause_val[:22], border=1, align='L')
-        pdf.cell(col_widths[7], 6, txt=solve_val[:20], border=1, align='L')
-        pdf.cell(col_widths[8], 6, txt=result_val[:20], border=1, align='L')
-        pdf.cell(col_widths[9], 6, txt=impact_val[:20], border=1, align='L')
+        pdf.cell(col_widths[4], 6, txt=risk_desc[:20], border=1, align='L')
+        pdf.cell(col_widths[5], 6, txt=solve_val[:18], border=1, align='L')
+        pdf.cell(col_widths[6], 6, txt=prob_val[:18], border=1, align='L')
+        pdf.cell(col_widths[7], 6, txt=level_val[:8], border=1, align='C')
+        pdf.cell(col_widths[8], 6, txt=cause_val[:18], border=1, align='L')
+        pdf.cell(col_widths[9], 6, txt=result_val[:18], border=1, align='L')
+        pdf.cell(col_widths[10], 6, txt=impact_val[:18], border=1, align='L')
         pdf.ln()
 
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
@@ -159,14 +185,14 @@ def generate_pdf_table(dataframe):
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงาน")
-if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (ตาราง + รายละเอียด S-X)"):
+if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (ตารางครบถ้วน + S-X)"):
     try:
         pdf_path = generate_pdf_table(df_f)
         with open(pdf_path, "rb") as f:
             st.sidebar.download_button(
                 label="คลิกเพื่อบันทึกไฟล์ PDF",
                 data=f,
-                file_name="Risk_Analysis_Report_SX.pdf",
+                file_name="Risk_Full_Report.pdf",
                 mime="application/pdf"
             )
     except Exception as e:
