@@ -67,10 +67,9 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (ปรับแต่งใหม่: กระชับ ไม่ซ้ำซ้อน และจัดหน้าสวยงาม) ---
+# --- ฟังก์ชันสร้างรายงาน PDF (ปรับลำดับคอลัมน์: นำการแก้ไขเบื้องต้นมาไว้ก่อนสาเหตุเกิดจาก) ---
 class PDFTableReport(FPDF):
     def header(self):
-        # ละเว้นการพิมพ์หัวข้อซ้ำซ้อนเมื่อขึ้นหน้าใหม่ เพื่อป้องกันปัญหาข้อความทับซ้อน
         pass
 
 def generate_pdf_table(dataframe):
@@ -98,21 +97,22 @@ def generate_pdf_table(dataframe):
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(1)
 
+    # ปรับลำดับ Header (ย้าย "การแก้ไขเบื้องต้น" มาไว้ก่อน "สาเหตุเกิดจาก (U)")
     headers = [
         "ลำดับ", 
         "วันที่เกิด", 
         "หน่วยงาน", 
         "ช่วงเวร", 
         "ความเสี่ยงที่เกิด", 
-        "การแก้ไขเบื้องต้น", 
         "ปัญหาที่พบ (S)", 
         "LEVEL (T)", 
+        "การแก้ไขเบื้องต้น", 
         "สาเหตุเกิดจาก (U)", 
         "ผลการแก้ไข (W)", 
         "ผลกระทบต่อคนไข้ (X)"
     ]
-    # ปรับสัดส่วนความกว้างคอลัมน์รวม 276 มม.
-    col_widths = [10, 21, 22, 15, 33, 29, 29, 13, 29, 37, 38] 
+    # ปรับสัดส่วนความกว้างคอลัมน์รวม 276 มม. ให้สอดคล้องกับลำดับใหม่
+    col_widths = [10, 21, 22, 15, 33, 29, 13, 29, 29, 37, 38] 
 
     # Header Styling
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
@@ -154,15 +154,16 @@ def generate_pdf_table(dataframe):
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
+        # จัดเรียงข้อมูลใน row_data ให้ตรงกับ headers ใหม่
         row_data = [
             str(idx+1),
             date_str,
             unit_name,
             shift_val,
             risk_desc,
-            solve_val,
             prob_val,
             level_val,
+            solve_val,  # ย้ายมาไว้ก่อนสาเหตุเกิดจาก
             cause_val,
             result_val,
             impact_val
@@ -204,7 +205,7 @@ def generate_pdf_table(dataframe):
         x_start = pdf.get_x()
         y_start = pdf.get_y()
 
-        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'L', 'C', 'L', 'L', 'L']
+        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'C', 'L', 'L', 'L', 'L']
 
         # พิมพ์ทุกคอลัมน์ให้มีความสูงเท่ากันทั้งแถว
         for i, text in enumerate(row_data):
