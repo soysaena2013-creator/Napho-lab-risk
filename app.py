@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import io
+import requests
 from fpdf import FPDF
 import tempfile
 import os
@@ -36,12 +38,14 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูลและคลีนข้อมูล (แก้ปัญหาช่องว่างและข้อความภาษาไทยตกหล่น)
+# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
 @st.cache_data(ttl=1)
 def load_data():
-    url = "https://docs.google.com/spreadsheets/d/ID_ไฟล์สเปรดชีตของคุณ/export?format=csv&gid=0"
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
     try:
-        df = pd.read_csv(url)
+        response = requests.get(url)
+        response.raise_for_status()
+        df = pd.read_csv(io.BytesIO(response.content))
     except Exception as e:
         st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
         return pd.DataFrame()
@@ -49,10 +53,9 @@ def load_data():
     # ทำความสะอาดชื่อหัวคอลัมน์ทั้งหมด
     df.columns = df.columns.str.strip()
     
-    # ทำความสะอาดข้อมูลที่เป็นข้อความทั้งหมดเพื่อป้องกันปัญหาช่องว่างแฝง (เช่น "ยานพาหนะ ")
+    # ทำความสะอาดข้อมูลที่เป็นข้อความทั้งหมดเพื่อป้องกันปัญหาช่องว่างแฝง
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].astype(str).str.strip()
-        # แปลง 'nan' กลับเป็นค่าว่างเพื่อความถูกต้อง
         df[col] = df[col].replace('nan', np.nan)
         
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
