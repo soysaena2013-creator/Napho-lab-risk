@@ -44,6 +44,8 @@ def load_data():
     df = pd.read_csv(url)
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True)
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
+    # ทำความสะอาดข้อมูลหน่วยงาน ป้องกันค่าว่างหรือช่องว่างเกิน
+    df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'] = df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].astype(str).str.strip()
     return df
 
 df = load_data()
@@ -71,7 +73,7 @@ selected_month_names = st.sidebar.multiselect("เลือกเดือน", 
 selected_months = [month_options[m] for m in selected_month_names]
 
 risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].unique())
-unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())
+unit = st.sidebar.multiselect("หน่วยงาน", sorted(df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique()))
 
 # กรองข้อมูล
 df_f = df.copy()
@@ -247,29 +249,45 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (บังคับแสดงชื่อภาษาไทยที่แกน X ครบถ้วน) ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (บังคับแสดงชื่อหน่วยงานภาษาไทยทุกค่า) ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if not df_f.empty:
     if matched_cols:
         col_name = matched_cols[0]
-        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
-        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
+        # จัดกลุ่มและบังคับให้เรียงชื่อหน่วยงานตามตัวอักษรเพื่อไม่ให้ชื่อภาษาไทยตกหล่น
+        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name], observed=False).size().reset_index(name='count')
+        fig_bar = px.bar(
+            bar_df, 
+            x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+            y='count', 
+            color=col_name, 
+            barmode='group', 
+            text_auto=True,
+            category_orders={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': sorted(bar_df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())}
+        )
     else:
-        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
-        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='5.ประเภทความเสี่ยง', barmode='group', text_auto=True)
+        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง'], observed=False).size().reset_index(name='count')
+        fig_bar = px.bar(
+            bar_df, 
+            x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+            y='count', 
+            color='5.ประเภทความเสี่ยง', 
+            barmode='group', 
+            text_auto=True,
+            category_orders={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': sorted(bar_df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].unique())}
+        )
     
-    # ตั้งค่าบังคับให้แกน X แสดงชื่อภาษาไทยทั้งหมดอย่างชัดเจน ไม่ถูกตัดทอน
     fig_bar.update_traces(textangle=0, textposition='auto')
     fig_bar.update_layout(
         font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
         xaxis=dict(
-            tickangle=-30,  # เอียงเล็กน้อยเพื่อให้ชื่อหน่วยงานยาวๆ (เช่น ยานพาหนะ) แสดงได้เต็มที่
+            tickangle=-25,
             type='category',
-            tickmode='array'
+            tickmode='linear'
         ),
-        margin=dict(b=80)  # เพิ่มขอบล่างเผื่อพื้นที่ชื่อหน่วยงาน
+        margin=dict(b=100)
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
@@ -279,7 +297,7 @@ else:
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
 if matched_cols and not df_f.empty:
     col_name = matched_cols[0]
-    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().unstack(fill_value=0)
+    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name], observed=False).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
         if col != 'รวม':
@@ -307,7 +325,7 @@ if not melted_all.empty:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
         risk_subset['Month_Year'] = risk_subset['Date'].dt.to_period('M').astype(str)
-        trend_df = risk_subset.groupby('Month_Year').size().reset_index(name='Count')
+        trend_df = risk_subset.groupby('Month_Year', observed=False).size().reset_index(name='Count')
         
         st.markdown(f"**กราฟเส้นแสดงแนวโน้มการเกิดความเสี่ยง: `{selected_risk_item}`**")
         fig_line = px.line(trend_df, x='Month_Year', y='Count', markers=True, text='Count', labels={'Month_Year': 'เดือน/ปี', 'Count': 'จำนวนครั้ง'})
@@ -339,7 +357,7 @@ else:
 # --- 5. ส่วนคำนวณ Risk Matrix ---
 st.markdown("---")
 if not melted_all.empty:
-    matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
+    matrix_df = melted_all.groupby('Risk_Detail', observed=False).size().reset_index(name='Frequency')
 
     def get_sev_from_row(risk_name):
         sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
