@@ -266,65 +266,71 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแสดงจำนวนความเสี่ยง (ผสาน: ความเสี่ยงทั่วไป + ความเสี่ยงทางคลินิกแยก Miss/Near Miss) ---
-st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงาน (ความเสี่ยงทั่วไป และ คลินิก: Miss vs Near Miss)")
+# --- 1. แผนภูมิแท่งสรุปภาพรวม (แสดงผลเฉพาะ 2 แท่ง: ความเสี่ยงทางคลินิก และ ความเสี่ยงทั่วไป) ---
+st.subheader("📊 จำนวนความเสี่ยงภาพรวม (ความเสี่ยงทางคลินิก [แยก Miss / Near Miss] และ ความเสี่ยงทั่วไป)")
 
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
-if not df_f.empty and '5.ประเภทความเสี่ยง' in df_f.columns and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns:
-    # สร้างคอลัมน์จำแนกกลุ่มย่อยสำหรับการแสดงผลในกราฟแท่งแบบซ้อน (Stacked Bar)
-    # - หากเป็นความเสี่ยงทางคลินิก จะดึงค่า Miss / Near Miss มาแสดงแยกสี
-    # - หากเป็นความเสี่ยงทั่วไป จะใช้ชื่อประเภทความเสี่ยงหรือหมวดหมู่ทั่วไปนั้นๆ เพื่อไม่ให้ข้อมูลยานพาหนะหลุดหาย
-    def get_display_category(row):
+if not df_f.empty and '5.ประเภทความเสี่ยง' in df_f.columns:
+    # จัดกลุ่มข้อมูลให้เหลือเพียง 2 กลุ่มใหญ่ตามที่ท่านสั่ง (ความเสี่ยงทางคลินิก และ ความเสี่ยงทั่วไป)
+    # โดยถ้าเป็นคลินิก จะแยกย่อยเป็น Miss / Near Miss เพื่อทำ Stacked Bar ในแท่งเดียวกัน
+    def get_main_bar_category(row):
         risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
         if 'คลินิก' in risk_type:
             if matched_event_cols:
                 ev_val = str(row.get(matched_event_cols[0], '')).strip()
                 if ev_val and ev_val != 'nan':
-                    return f"คลินิก: {ev_val}"
-            return "ความเสี่ยงทางคลินิก (อื่นๆ)"
+                    return f"ความเสี่ยงทางคลินิก: {ev_val}"  # เช่น คลินิก: Miss หรือ คลินิก: Near Miss
+            return "ความเสี่ยงทางคลินิก: อื่นๆ"
         else:
-            # สำหรับความเสี่ยงทั่วไป (เช่น ยานพาหนะ สิ่งแวดล้อม ฯลฯ) ให้แสดงตามประเภทความเสี่ยง
-            return risk_type if risk_type and risk_type != 'nan' else 'ความเสี่ยงทั่วไป'
+            return "ความเสี่ยงทั่วไป"
 
-    df_f['Chart_Group'] = df_f.apply(get_display_category, axis=1)
+    df_f['Main_Bar_Group'] = df_f.apply(get_main_bar_category, axis=1)
 
-    bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Chart_Group']).size().reset_index(name='count')
+    # จัดกลุ่มนับจำนวนตาม Main_Bar_Group เพื่อให้ขึ้นเป็น 2 แท่งหลักบนแกน X
+    bar_df = df_f.groupby('Main_Bar_Group').size().reset_index(name='count')
     
+    # เพิ่มคอลัมน์จำแนกประเภทหลักและประเภทย่อยเพื่อส่งให้ Plotly ทำ Stacked สีต่างกันในแท่งคลินิก
+    def get_stack_hue(group_name):
+        if 'Miss' in group_name and 'Near' not in group_name:
+            return 'Miss (ทางคลินิก)'
+        elif 'Near Miss' in group_name:
+            return 'Near Miss (ทางคลินิก)'
+        elif 'อื่นๆ' in group_name:
+            return 'อื่นๆ (ทางคลินิก)'
+        else:
+            return 'ความเสี่ยงทั่วไป'
+
+    bar_df['Category_Type'] = bar_df['Main_Bar_Group'].apply(get_stack_hue)
+    bar_df['X_Axis_Label'] = bar_df['Main_Bar_Group'].apply(lambda x: 'ความเสี่ยงทางคลินิก' if 'คลินิก' in x else 'ความเสี่ยงทั่วไป')
+
     fig_bar = px.bar(
         bar_df, 
-        x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+        x='X_Axis_Label', 
         y='count', 
-        color='Chart_Group', 
+        color='Category_Type', 
         barmode='stack', 
         text_auto=True,
-        labels={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน', 'count': 'จำนวนครั้ง', 'Chart_Group': 'ประเภท / รูปแบบเหตุการณ์'}
+        labels={'X_Axis_Label': 'ประเภทความเสี่ยงหลัก', 'count': 'จำนวนครั้ง', 'Category_Type': 'รายละเอียด'}
     )
     
     fig_bar.update_traces(textangle=0, textposition='inside')
     fig_bar.update_layout(
         font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
-        xaxis=dict(
-            tickangle=-30,
-            type='category',
-            tickmode='array'
-        ),
-        margin=dict(b=90),
-        legend=dict(title="ประเภทความเสี่ยง / รูปแบบเหตุการณ์")
+        xaxis=dict(type='category'),
+        margin=dict(b=50),
+        legend=dict(title="องค์ประกอบในแท่ง")
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
-# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามกลุ่มแสดงผล ---
-st.subheader("ตารางสรุปสถิติอุบัติการณ์ (ความเสี่ยงทั่วไป และ คลินิก: Miss / Near Miss)")
-if not df_f.empty and 'Chart_Group' in df_f.columns:
-    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Chart_Group']).size().unstack(fill_value=0)
-    stats_df['รวม'] = stats_df.sum(axis=1)
-    for col in stats_df.columns:
-        if col != 'รวม':
-            stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
-    st.dataframe(stats_df, use_container_width=True)
+# --- 2. ตารางสรุปสถิติอุบัติการณ์ ---
+st.subheader("ตารางสรุปสถิติอุบัติการณ์ (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
+if not df_f.empty and 'Main_Bar_Group' in df_f.columns:
+    stats_df = df_f.groupby('Main_Bar_Group').size().reset_index(name='จำนวนครั้ง')
+    stats_df['ร้อยละ (%)'] = (stats_df['จำนวนครั้ง'] / stats_df['จำนวนครั้ง'].sum() * 100).round(2)
+    st.dataframe(stats_df, use_container_width=True, hide_index=True)
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
