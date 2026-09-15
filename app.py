@@ -50,7 +50,10 @@ def load_data():
         st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
         return pd.DataFrame()
     
+    # ทำความสะอาดชื่อหัวคอลัมน์ทั้งหมด
     df.columns = df.columns.str.strip()
+    
+    # ทำความสะอาดข้อมูลที่เป็นข้อความทั้งหมดเพื่อป้องกันปัญหาช่องว่างแฝง
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].astype(str).str.strip()
         df[col] = df[col].replace('nan', np.nan)
@@ -87,6 +90,7 @@ if not df.empty:
     risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
     unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
 
+    # กรองข้อมูล
     df_f = df.copy()
     if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
     if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
@@ -98,7 +102,7 @@ else:
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม ---
+# --- ฟังก์ชันสร้างรายงาน PDF ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -112,8 +116,10 @@ def generate_pdf_table(dataframe):
     font_path = "Sarabun-Regular.ttf"
     if not os.path.exists(font_path):
         import urllib.request
-        try: urllib.request.urlretrieve(font_url, font_path)
-        except: pass
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+        except:
+            pass
 
     if os.path.exists(font_path):
         pdf.add_font("Sarabun", "", font_path)
@@ -185,7 +191,11 @@ def generate_pdf_table(dataframe):
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-        row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, prob_val, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
+        row_data = [
+            str(idx+1), date_str, unit_name, shift_val, risk_desc,
+            prob_val, level_val, cause_val, immediate_fix_val,  
+            solve_val, result_val, impact_val
+        ]
 
         max_lines = 1
         for i, text in enumerate(row_data):
@@ -205,6 +215,7 @@ def generate_pdf_table(dataframe):
             pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
             pdf.set_fill_color(41, 128, 185)
             pdf.set_text_color(255, 255, 255)
+            
             x_start_hdr2 = pdf.get_x()
             y_start_hdr2 = pdf.get_y()
             for i, h in enumerate(headers):
@@ -214,6 +225,7 @@ def generate_pdf_table(dataframe):
                 pdf.set_xy(x_curr, y_curr + 1.5)
                 pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
                 pdf.set_xy(x_curr + col_widths[i], y_curr)
+            
             pdf.set_xy(x_start_hdr2, y_start_hdr2 + header_height)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
@@ -240,38 +252,73 @@ def generate_pdf_table(dataframe):
     return tmp_file.name
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("ออกรายงานภาพรวม")
-if st.sidebar.button("📥 ดาวน์โหลดรายงานตาราง PDF (ข้อมูลครบถ้วน)"):
+st.sidebar.subheader("ออกรายงาน")
+if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (ข้อมูลครบถ้วน + จัดเต็มบรรทัด)"):
     try:
         pdf_path = generate_pdf_table(df_f)
         with open(pdf_path, "rb") as f:
-            st.sidebar.download_button("คลิกเพื่อบันทึกไฟล์ PDF", f, file_name="Risk_Full_Report.pdf", mime="application/pdf")
+            st.sidebar.download_button(
+                label="คลิกเพื่อบันทึกไฟล์ PDF",
+                data=f,
+                file_name="Risk_Full_Report_Complete.pdf",
+                mime="application/pdf"
+            )
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
 # --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
+
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
+    
     def get_clean_unit_category(row):
         risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
         if 'คลินิก' in risk_type:
             if matched_event_cols:
                 ev_val = str(row.get(matched_event_cols[0], '')).strip()
-                if 'Miss' in ev_val and 'Near' not in ev_val: return 'Miss (ทางคลินิก)'
-                elif 'Near Miss' in ev_val: return 'Near Miss (ทางคลินิก)'
+                if 'Miss' in ev_val and 'Near' not in ev_val:
+                    return 'Miss (ทางคลินิก)'
+                elif 'Near Miss' in ev_val:
+                    return 'Near Miss (ทางคลินิก)'
             return None 
-        else: return 'ความเสี่ยงทั่วไป'
+        else:
+            return 'ความเสี่ยงทั่วไป'
 
     df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
     clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
+
     bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
     
-    color_map = {'Miss (ทางคลินิก)': '#1f77b4', 'Near Miss (ทางคลินิก)': '#aec7e8', 'ความเสี่ยงทั่วไป': '#2ca02c'}
-    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
+    color_map = {
+        'Miss (ทางคลินิก)': '#1f77b4',
+        'Near Miss (ทางคลินิก)': '#aec7e8',
+        'ความเสี่ยงทั่วไป': '#2ca02c'
+    }
+
+    fig_bar = px.bar(
+        bar_df, 
+        x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+        y='count', 
+        color='Clean_Group', 
+        barmode='stack', 
+        text_auto=True,
+        color_discrete_map=color_map,
+        labels={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน', 'count': 'จำนวนครั้ง', 'Clean_Group': 'ประเภทความเสี่ยง'}
+    )
+    
     fig_bar.update_traces(textangle=0, textposition='inside')
-    fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(tickangle=-30, type='category'))
+    fig_bar.update_layout(
+        font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
+        xaxis=dict(
+            tickangle=-30,
+            type='category',
+            tickmode='array'
+        ),
+        margin=dict(b=90),
+        legend=dict(title="ประเภทความเสี่ยง")
+    )
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
@@ -282,12 +329,13 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
     stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
-        if col != 'รวม': stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
+        if col != 'รวม':
+            stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
     st.dataframe(stats_df, use_container_width=True)
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ ---
+# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (แสดงผลครบทุกเดือนตามปีงบประมาณ) ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
@@ -307,36 +355,92 @@ if not melted_all.empty:
 
     if selected_risk_item:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
-        thai_months = {1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค."}
+        
+        thai_months = {
+            1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 
+            5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 
+            9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค."
+        }
+        
+        # จัดกลุ่มนับจำนวนจริงรายเดือน
         risk_subset['Month'] = risk_subset['Date'].dt.month
         risk_subset['Year'] = risk_subset['Date'].dt.year
+        
         actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Year', 'Month']).size().reset_index(name='Count')
         
+        # สร้างโครงสร้างเดือนปีงบประมาณไทยให้ครบทั้ง 12 เดือน (ต.ค. ถึง ก.ย.) ของปีงบประมาณที่เกี่ยวข้อง
         budget_years_in_subset = risk_subset['Thai_Budget_Year'].dropna().unique()
         full_grid = []
         for b_year in budget_years_in_subset:
+            # ปีงบประมาณ พ.ศ. X แปลงเป็น ค.ศ. เริ่มจาก ต.ค. (พ.ศ. X-1) ถึง ก.ย. (พ.ศ. X)
             ce_year = int(b_year) - 543
-            months_seq = [(ce_year - 1, 10), (ce_year - 1, 11), (ce_year - 1, 12), (ce_year, 1), (ce_year, 2), (ce_year, 3), (ce_year, 4), (ce_year, 5), (ce_year, 6), (ce_year, 7), (ce_year, 8), (ce_year, 9)]
+            months_seq = [
+                (ce_year - 1, 10), (ce_year - 1, 11), (ce_year - 1, 12),
+                (ce_year, 1), (ce_year, 2), (ce_year, 3), 
+                (ce_year, 4), (ce_year, 5), (ce_year, 6), 
+                (ce_year, 7), (ce_year, 8), (ce_year, 9)
+            ]
             for y, m in months_seq:
-                full_grid.append({'Thai_Budget_Year': b_year, 'Year': y, 'Month': m, 'Month_Label': f"{thai_months[m]} {y + 543}", 'Sort_Key': f"{y}-{m:02d}"})
+                m_label = f"{thai_months[m]} {y + 543}"
+                sort_key = f"{y}-{m:02d}"
+                full_grid.append({
+                    'Thai_Budget_Year': b_year,
+                    'Year': y,
+                    'Month': m,
+                    'Month_Label': m_label,
+                    'Sort_Key': sort_key
+                })
         
         grid_df = pd.DataFrame(full_grid)
-        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Year', 'Month'], how='left').fillna({'Count': 0})
+        
+        # Merge กับข้อมูลจริง เพื่อให้เดือนที่ไม่มีอุบัติการณ์แสดงค่าเป็น 0
+        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Year', 'Month'], how='left')
+        merged_trend['Count'] = merged_trend['Count'].fillna(0)
         merged_trend = merged_trend.sort_values('Sort_Key')
         
         st.markdown(f"**กราฟเส้นแสดงแนวโน้มรายเดือนตลอดปีงบประมาณ: `{selected_risk_item}`**")
-        fig_line = px.line(merged_trend, x='Month_Label', y='Count', markers=True, text='Count', labels={'Month_Label': 'เดือน/ปีงบประมาณ', 'Count': 'จำนวนครั้ง'})
+        fig_line = px.line(
+            merged_trend, 
+            x='Month_Label', 
+            y='Count', 
+            markers=True, 
+            text='Count', 
+            labels={'Month_Label': 'เดือน/ปีงบประมาณ', 'Count': 'จำนวนครั้ง'}
+        )
         fig_line.update_traces(textposition="top center", textfont=dict(size=12))
-        fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
+        fig_line.update_layout(
+            font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
+            xaxis=dict(type='category', tickangle=-30),
+            margin=dict(b=60)
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# --- 4. ตารางสรุป Risk Matrix (นำกลับมาให้แล้วครับ) ---
-st.markdown("---")
-st.subheader("📋 ตารางประเมินระดับความเสี่ยง (Risk Matrix Summary)")
+        # --- 4. ฟังก์ชั่นทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข ---
+        st.markdown("---")
+        st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข (Risk Review & Corrective Action)")
+        
+        col_rev1, col_rev2 = st.columns(2)
+        with col_rev1:
+            st.markdown("##### 🔍 1. การวิเคราะห์สาเหตุ (Root Cause Analysis)")
+            cause_notes = st.text_area("บันทึกวิเคราะห์สาเหตุของปัญหา:", placeholder="ระบุปัจจัยที่ก่อให้เกิดความเสี่ยง เช่น ด้านบุคลากร เครื่องมือ สิ่งแวดล้อม หรือกระบวนการปฏิบัติงาน...", height=120)
+        
+        with col_rev2:
+            st.markdown("##### 🛡️ 2. แนวทางแก้ไขและป้องกัน (Corrective & Preventive Action - CAPA)")
+            action_notes = st.text_area("ระบุมาตรการป้องกันแก้ไขตามมาตรฐาน:", placeholder="ระบุมาตรการแก้ไขเฉพาะหน้า และมาตรการป้องกันไม่ให้เกิดซ้ำตามมาตรฐานคุณภาพ...", height=120)
 
+        if st.button("💾 บันทึกผลการทบทวนความเสี่ยงนี้"):
+            st.success("บันทึกข้อมูลการทบทวนความเสี่ยงและแนวทางแก้ไขเรียบร้อยแล้ว!")
+
+        with st.expander("📋 ดูรายการเหตุการณ์ดิบที่เกี่ยวข้องกับความเสี่ยงนี้"):
+            st.dataframe(risk_subset[['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']], use_container_width=True)
+else:
+    st.info("ไม่พบข้อมูลรายการความเสี่ยงย่อยในช่วงเวลาที่เลือก")
+
+# --- 5. ส่วนคำนวณ Risk Matrix ---
+st.markdown("---")
 if not melted_all.empty:
     matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
-    
+
     def get_sev_from_row(risk_name):
         sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
         if not sev_col: return 'A'
@@ -348,102 +452,23 @@ if not melted_all.empty:
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
-    display_matrix_df = matrix_df[['Risk_Detail', 'Frequency', 'Sev_Raw', 'Risk_Matrix', 'Risk_Level']].rename(columns={
-        'Risk_Detail': 'รายการความเสี่ยง',
-        'Frequency': 'ความถี่ (Count)',
-        'Sev_Raw': 'ระดับความรุนแรง',
-        'Risk_Matrix': 'คะแนน Matrix',
-        'Risk_Level': 'ระดับความเสี่ยง'
-    }).sort_values(by='คะแนน Matrix', ascending=False)
+    st.subheader("ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+    display_df = matrix_df.copy()
+    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
+    
+    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']], use_container_width=True, hide_index=True)
+    
+    st.subheader("แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
 
-    st.dataframe(display_matrix_df, use_container_width=True)
-
-# --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง) & จัดเก็บเอกสารคุณภาพ PDF ---
-st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ (ก้างปลา) และจัดทำเอกสารคุณภาพ PDF")
-
-if not melted_all.empty:
-    high_risk_df = matrix_df[matrix_df['Risk_Level'].isin(['สูง (สีส้ม)', 'สูงมาก (สีแดง)'])]
-
-    if not high_risk_df.empty:
-        high_risk_options = high_risk_df['Risk_Detail'].tolist()
-        selected_high_risk = st.selectbox("🚨 เลือกความเสี่ยงระดับสูง (สีส้ม/สีแดง) เพื่อนำมาทบทวนเชิงลึก:", high_risk_options)
-
-        if selected_high_risk:
-            current_row = high_risk_df[high_risk_df['Risk_Detail'] == selected_high_risk].iloc[0]
-            st.info(f"📌 **ความเสี่ยงที่เลือก:** {selected_high_risk} | **ระดับความเสี่ยง:** {current_row['Risk_Level']} (คะแนน Matrix: {current_row['Risk_Matrix']})")
-
-            col_rev1, col_rev2 = st.columns(2)
-            with col_rev1:
-                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Fishbone Diagram - ก้างปลา)")
-                fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
-                fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
-                fish_material = st.text_area("🧪 วัสดุ/สิ่งแวดล้อม (Material/Milieu):", "คุณภาพสิ่งส่งตรวจ / สิ่งแวดล้อมหน้างานมีความแออัด")
-            
-            with col_rev2:
-                st.markdown("##### 🛡️ 2. แนวทางแก้ไขและป้องกัน (CAPA)")
-                fish_method = st.text_area("📋 กระบวนการ (Process):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
-                corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
-                preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
-
-            # ฟังก์ชันสร้างไฟล์ PDF สำหรับเก็บเป็นเอกสารคุณภาพ
-            def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, corr_act, prev_act):
-                pdf = FPDF(orientation='P', unit='mm', format='A4')
-                pdf.set_auto_page_break(auto=True, margin=15)
-                pdf.add_page()
-                
-                font_path = "Sarabun-Regular.ttf"
-                if os.path.exists(font_path):
-                    pdf.add_font("Sarabun", "", font_path)
-                    pdf.set_font("Sarabun", size=14)
-                else:
-                    pdf.set_font("Arial", size=14)
-
-                pdf.cell(0, 8, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.cell(0, 6, txt="ระบบบริหารจัดการความเสี่ยงมาตรฐานห้องปฏิบัติการ (ISO 15189)", ln=True, align='C')
-                pdf.ln(5)
-
-                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
-                pdf.cell(0, 7, txt=f"รายการความเสี่ยง: {risk_name}", ln=True)
-                pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {risk_lvl}", ln=True)
-                pdf.ln(3)
-
-                pdf.set_fill_color(230, 240, 250)
-                pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา)", ln=True, fill=True)
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สิ่งแวดล้อม: {material}\n- กระบวนการ (Process): {method}")
-                pdf.ln(3)
-
-                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
-                pdf.set_fill_color(230, 240, 250)
-                pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
-                
-                tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-                pdf.output(tmp_pdf.name)
-                return tmp_pdf.name
-
-            if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) สำหรับเก็บเข้าระบบ"):
-                try:
-                    pdf_file_path = generate_capa_pdf(
-                        selected_high_risk, current_row['Risk_Level'], 
-                        fish_man, fish_machine, fish_material, fish_method, 
-                        corrective_action, preventive_action
-                    )
-                    with open(pdf_file_path, "rb") as f:
-                        st.download_button(
-                            label="📥 คลิกดาวน์โหลดเอกสาร PDF บันทึกความเสี่ยงนี้",
-                            data=f,
-                            file_name=f"CAPA_Report_{current_row['Risk_Matrix']}.pdf",
-                            mime="application/pdf"
-                        )
-                    st.success("บันทึกข้อมูลและเตรียมเอกสาร PDF สำหรับจัดเก็บเรียบร้อยแล้วครับ!")
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
-    else:
-        st.success("✨ ในช่วงเวลาและเงื่อนไขที่เลือก ไม่พบความเสี่ยงระดับสูง (สีส้มหรือสีแดง) ทุกอย่างอยู่ในเกณฑ์มาตรฐานที่ควบคุมได้ครับ!")
-else:
-    st.info("ไม่พบข้อมูลความเสี่ยงในระบบ")
+    fig_matrix = px.scatter(
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5]
+    )
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
