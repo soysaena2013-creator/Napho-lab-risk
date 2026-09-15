@@ -29,7 +29,6 @@ def get_sev_score(text):
 # ฟังก์ชันคำนวณปีงบประมาณไทย (ตุลาคม - กันยายน)
 def get_thai_budget_year(date):
     if pd.isnull(date): return None
-    # ถ้าเดือน >= 10 ปีงบประมาณคือปีถัดไป
     if date.month >= 10:
         return date.year + 543 + 1
     else:
@@ -56,7 +55,6 @@ if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทัน�
     st.cache_data.clear()
     st.rerun()
 
-# เลือกปีงบประมาณไทย
 available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
 selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
 
@@ -249,7 +247,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (รองรับภาษาไทย + รวมความเสี่ยงคลินิก/ทั่วไป) ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -262,7 +260,6 @@ if not df_f.empty:
         bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
         fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='5.ประเภทความเสี่ยง', barmode='group', text_auto=True)
     
-    # ตั้งค่าฟอนต์และการแสดงผลภาษาไทยบนกราฟ
     fig_bar.update_traces(textangle=0, textposition='auto')
     fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_bar, use_container_width=True)
@@ -287,7 +284,11 @@ st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melted_all = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+# ทำการ melt โดยดึงคอลัมน์ Date และหน่วยงานติดมาด้วยเพื่อป้องกัน KeyError
+melt_id_vars = ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
+melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
+
+melted_all = df_f.melt(id_vars=melt_id_vars, value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
 melted_all = melted_all[melted_all['Risk_Detail'] != '']
 
 if not melted_all.empty:
@@ -295,10 +296,8 @@ if not melted_all.empty:
     selected_risk_item = st.selectbox("🎯 เลือกรายการความเสี่ยงที่ต้องการเจาะลึกเพื่อทบทวน:", unique_risks)
 
     if selected_risk_item:
-        # กรองเฉพาะเคสที่ตรงกับความเสี่ยงย่อยที่เลือก
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
-        # จัดกลุ่มตามเดือน/ปี หรือวันที่ เพื่อทำกราฟเส้นแนวโน้ม
         risk_subset['Month_Year'] = risk_subset['Date'].dt.to_period('M').astype(str)
         trend_df = risk_subset.groupby('Month_Year').size().reset_index(name='Count')
         
@@ -322,11 +321,10 @@ if not melted_all.empty:
             action_notes = st.text_area("ระบุแนวทางป้องกันแก้ไขตามมาตรฐาน:", placeholder="ระบุมาตรการแก้ไขเฉพาะหน้า และมาตรการป้องกันไม่ให้เกิดซ้ำตามมาตรฐานคุณภาพ...", height=120)
 
         if st.button("💾 บันทึกผลการทบทวนความเสี่ยงนี้"):
-            st.success("บันทึกข้อมูลการทบทวนความเสี่ยงและแนวทางแก้ไขเรียบร้อยแล้ว! (สามารถนำข้อเสนอนี้ไปจัดทำรายงานทบทวนประจำเดือน/ปีได้ทันที)")
+            st.success("บันทึกข้อมูลการทบทวนความเสี่ยงและแนวทางแก้ไขเรียบร้อยแล้ว!")
 
         with st.expander("📋 ดูรายการเหตุการณ์ดิบที่เกี่ยวข้องกับความเสี่ยงนี้"):
-            original_indices = risk_subset.index
-            st.dataframe(df_f.loc[original_indices, ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']], use_container_width=True)
+            st.dataframe(risk_subset[['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']], use_container_width=True)
 else:
     st.info("ไม่พบข้อมูลรายการความเสี่ยงย่อยในช่วงเวลาที่เลือก")
 
