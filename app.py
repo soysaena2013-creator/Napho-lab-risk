@@ -37,19 +37,22 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (บังคับดึงจากแท็บ "การตอบแบบฟอร์ม 1" โดยใช้ gid ของฟอร์ม)
-@st.cache_data(ttl=0)
+# 1. โหลดข้อมูล (พร้อมทำความสะอาดช่องว่างและหัวคอลัมน์เพื่อไม่ให้ข้อมูลตกหล่น)
+@st.cache_data(ttl=1)
 def load_data():
-    # URL หลักสำหรับดึงข้อมูลจาก Google Sheets (ระบุ gid สำหรับแท็บการตอบแบบฟอร์มโดยตรง)
-    # หากท่านมี gid ของแท็บ "การตอบแบบฟอร์ม 1" สามารถเปลี่ยนตัวเลขหลัง gid= ได้ทันทีครับ
-    url_form = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?gid=0&single=true&output=csv"
-    
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
     try:
-        df = pd.read_csv(url_form)
-    except:
-        # Fallback URL สำรอง
-        fallback_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
-        df = pd.read_csv(fallback_url)
+        df = pd.read_csv(url)
+    except Exception as e:
+        st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
+        return pd.DataFrame()
+    
+    # ตัดช่องว่างหัวคอลัมน์และข้อมูลที่เป็นข้อความ
+    df.columns = df.columns.str.strip()
+    if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df.columns:
+        df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'] = df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].astype(str).str.strip()
+    if '5.ประเภทความเสี่ยง' in df.columns:
+        df['5.ประเภทความเสี่ยง'] = df['5.ประเภทความเสี่ยง'].astype(str).str.strip()
         
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
@@ -64,31 +67,34 @@ if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทัน�
     st.cache_data.clear()
     st.rerun()
 
-available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
-selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
+if not df.empty:
+    available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
+    selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
 
-quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
+    quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
-month_names = {
-    1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
-    5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม",
-    9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม"
-}
-available_months = sorted(df['Date'].dt.month.dropna().unique())
-month_options = {month_names[int(m)]: m for m in available_months if int(m) in month_names}
-selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
-selected_months = [month_options[m] for m in selected_month_names]
+    month_names = {
+        1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
+        5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม",
+        9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม"
+    }
+    available_months = sorted(df['Date'].dt.month.dropna().unique())
+    month_options = {month_names[int(m)]: m for m in available_months if int(m) in month_names}
+    selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
+    selected_months = [month_options[m] for m in selected_month_names]
 
-risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
-unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
+    risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
+    unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
 
-# กรองข้อมูล
-df_f = df.copy()
-if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
-if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
-if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
-if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
-if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
+    # กรองข้อมูล
+    df_f = df.copy()
+    if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
+    if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
+    if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
+    if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
+    if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
+else:
+    df_f = pd.DataFrame()
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
@@ -256,7 +262,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (รองรับหน่วยงานภาษาไทยทุกค่า เช่น ยานพาหนะ) ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -273,7 +279,7 @@ if not df_f.empty:
     fig_bar.update_layout(
         font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
         xaxis=dict(
-            tickangle=-30,  # เอียงป้ายชื่อหน่วยงานภาษาไทยให้แสดงผลครบถ้วนไม่ถูกซ่อน
+            tickangle=-30,
             type='category',
             tickmode='array'
         ),
@@ -296,7 +302,7 @@ if matched_cols and not df_f.empty:
 else:
     st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์'")
 
-# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (Trend Line) ---
+# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
@@ -304,8 +310,11 @@ risk_cols = [c for c in df.columns if 'ระบุความเสี่ย�
 melt_id_vars = ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
 melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
 
-melted_all = df_f.melt(id_vars=melt_id_vars, value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-melted_all = melted_all[melted_all['Risk_Detail'] != '']
+if not df_f.empty and risk_cols:
+    melted_all = df_f.melt(id_vars=melt_id_vars, value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+    melted_all = melted_all[melted_all['Risk_Detail'] != '']
+else:
+    melted_all = pd.DataFrame()
 
 if not melted_all.empty:
     unique_risks = sorted(melted_all['Risk_Detail'].unique())
@@ -323,7 +332,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # --- 4. ฟังก์ชั่นทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข ตามมาตรฐานความเสี่ยง ---
+        # --- 4. ฟังก์ชั่นทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข ---
         st.markdown("---")
         st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข (Risk Review & Corrective Action)")
         
@@ -334,7 +343,7 @@ if not melted_all.empty:
         
         with col_rev2:
             st.markdown("##### 🛡️ 2. แนวทางแก้ไขและป้องกัน (Corrective & Preventive Action - CAPA)")
-            action_notes = st.text_area("ระบุแนวทางป้องกันแก้ไขตามมาตรฐาน:", placeholder="ระบุมาตรการแก้ไขเฉพาะหน้า และมาตรการป้องกันไม่ให้เกิดซ้ำตามมาตรฐานคุณภาพ...", height=120)
+            action_notes = st.text_area("ระบุมาตรการป้องกันแก้ไขตามมาตรฐาน:", placeholder="ระบุมาตรการแก้ไขเฉพาะหน้า และมาตรการป้องกันไม่ให้เกิดซ้ำตามมาตรฐานคุณภาพ...", height=120)
 
         if st.button("💾 บันทึกผลการทบทวนความเสี่ยงนี้"):
             st.success("บันทึกข้อมูลการทบทวนความเสี่ยงและแนวทางแก้ไขเรียบร้อยแล้ว!")
