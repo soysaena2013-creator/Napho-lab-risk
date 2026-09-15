@@ -39,7 +39,7 @@ st.set_page_config(layout="wide")
 # 1. โหลดข้อมูลและคลีนข้อมูล (แก้ปัญหาช่องว่างและข้อความภาษาไทยตกหล่น)
 @st.cache_data(ttl=1)
 def load_data():
-    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
+    url = "https://docs.google.com/spreadsheets/d/ID_ไฟล์สเปรดชีตของคุณ/export?format=csv&gid=0"
     try:
         df = pd.read_csv(url)
     except Exception as e:
