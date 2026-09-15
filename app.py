@@ -37,16 +37,19 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (ดึงจาก Google Sheets โดยระบุ gid ของแท็บ "การตอบแบบฟอร์ม 1")
+# 1. โหลดข้อมูล (บังคับดึงจากแท็บ "การตอบแบบฟอร์ม 1" โดยใช้ gid ของฟอร์ม)
 @st.cache_data(ttl=0)
 def load_data():
-    # ใช้ลิงก์แบบระบุ gid ให้ตรงกับแท็บ "การตอบแบบฟอร์ม 1"
-    base_url = "https://docs.google.com/spreadsheets/d/1S8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/export?format=csv"
-    # หากมี gid เฉพาะ สามารถใส่เพิ่มเช่น &gid=xxxxxx ด้านหลังได้ครับ
+    # URL หลักสำหรับดึงข้อมูลจาก Google Sheets (ระบุ gid สำหรับแท็บการตอบแบบฟอร์มโดยตรง)
+    # หากท่านมี gid ของแท็บ "การตอบแบบฟอร์ม 1" สามารถเปลี่ยนตัวเลขหลัง gid= ได้ทันทีครับ
+    url_form = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?gid=0&single=true&output=csv"
+    
     try:
-        df = pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?gid=0&single=true&output=csv")
+        df = pd.read_csv(url_form)
     except:
-        df = pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv")
+        # Fallback URL สำรอง
+        fallback_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
+        df = pd.read_csv(fallback_url)
         
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
@@ -253,7 +256,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (บังคับแสดงชื่อภาษาไทยครบถ้วนรวมถึง 'ยานพาหนะ') ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (รองรับหน่วยงานภาษาไทยทุกค่า เช่น ยานพาหนะ) ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
