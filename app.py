@@ -247,7 +247,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง ---
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (บังคับแสดงชื่อภาษาไทยที่แกน X ครบถ้วน) ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -260,8 +260,17 @@ if not df_f.empty:
         bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
         fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='5.ประเภทความเสี่ยง', barmode='group', text_auto=True)
     
+    # ตั้งค่าบังคับให้แกน X แสดงชื่อภาษาไทยทั้งหมดอย่างชัดเจน ไม่ถูกตัดทอน
     fig_bar.update_traces(textangle=0, textposition='auto')
-    fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    fig_bar.update_layout(
+        font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
+        xaxis=dict(
+            tickangle=-30,  # เอียงเล็กน้อยเพื่อให้ชื่อหน่วยงานยาวๆ (เช่น ยานพาหนะ) แสดงได้เต็มที่
+            type='category',
+            tickmode='array'
+        ),
+        margin=dict(b=80)  # เพิ่มขอบล่างเผื่อพื้นที่ชื่อหน่วยงาน
+    )
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
@@ -284,7 +293,6 @@ st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-# ทำการ melt โดยดึงคอลัมน์ Date และหน่วยงานติดมาด้วยเพื่อป้องกัน KeyError
 melt_id_vars = ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
 melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
 
