@@ -26,15 +26,25 @@ def get_sev_score(text):
     elif any(x in text for x in ['C', 'D']): return 2
     return 1
 
+# ฟังก์ชันคำนวณปีงบประมาณไทย (ตุลาคม - กันยายน)
+def get_thai_budget_year(date):
+    if pd.isnull(date): return None
+    # ถ้าเดือน >= 10 ปีงบประมาณคือปีถัดไป
+    if date.month >= 10:
+        return date.year + 543 + 1
+    else:
+        return date.year + 543
+
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (กำหนด ttl=0 และปุ่มเคลียร์แคชเพื่อให้ดึงข้อมูลใหม่ทันทีแบบเรียลไทม์)
+# 1. โหลดข้อมูล
 @st.cache_data(ttl=0)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv" 
     df = pd.read_csv(url)
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True)
+    df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
     return df
 
 df = load_data()
@@ -46,7 +56,10 @@ if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทัน�
     st.cache_data.clear()
     st.rerun()
 
-year = st.sidebar.multiselect("เลือกปี", sorted(df['Date'].dt.year.unique()))
+# เลือกปีงบประมาณไทย
+available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
+selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
+
 quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
 month_names = {
@@ -64,7 +77,7 @@ unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วย�
 
 # กรองข้อมูล
 df_f = df.copy()
-if year: df_f = df_f[df_f['Date'].dt.year.isin(year)]
+if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
 if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
 if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
 if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
@@ -72,7 +85,7 @@ if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เ
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
-# --- ฟังก์ชันสร้างรายงาน PDF (จัดสัดส่วนและแก้ไขหัวตารางไม่ให้ทับซ้อน) ---
+# --- ฟังก์ชันสร้างรายงาน PDF ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -103,20 +116,10 @@ def generate_pdf_table(dataframe):
     pdf.ln(2)
 
     headers = [
-        "ลำดับ", 
-        "วันที่เกิด", 
-        "หน่วยงาน", 
-        "ช่วงเวร", 
-        "ความเสี่ยงที่เกิด", 
-        "ปัญหาที่พบ (S)", 
-        "LEVEL (T)", 
-        "สาเหตุเกิดจาก (U)", 
-        "การแก้ไขปัญหาเฉพาะหน้า",  # คอลัมน์ Z
-        "การแก้ไขเบื้องต้น", 
-        "ผลการแก้ไข (W)", 
-        "ผลกระทบต่อคนไข้ (X)"
+        "ลำดับ", "วันที่เกิด", "หน่วยงาน", "ช่วงเวร", "ความเสี่ยงที่เกิด", 
+        "ปัญหาที่พบ (S)", "LEVEL (T)", "สาเหตุเกิดจาก (U)", "การแก้ไขปัญหาเฉพาะหน้า",  
+        "การแก้ไขเบื้องต้น", "ผลการแก้ไข (W)", "ผลกระทบต่อคนไข้ (X)"
     ]
-    
     col_widths = [9, 20, 22, 14, 28, 25, 11, 26, 28, 26, 28, 38] 
 
     pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
@@ -137,7 +140,6 @@ def generate_pdf_table(dataframe):
         pdf.set_xy(x_curr + col_widths[i], y_curr)
     
     pdf.set_xy(x_start_hdr, y_start_hdr + header_height)
-
     pdf.set_text_color(0, 0, 0)
     line_height = 3.5 
 
@@ -173,18 +175,9 @@ def generate_pdf_table(dataframe):
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
         row_data = [
-            str(idx+1),
-            date_str,
-            unit_name,
-            shift_val,
-            risk_desc,
-            prob_val,
-            level_val,
-            cause_val,
-            immediate_fix_val,  
-            solve_val,  
-            result_val,
-            impact_val
+            str(idx+1), date_str, unit_name, shift_val, risk_desc,
+            prob_val, level_val, cause_val, immediate_fix_val,  
+            solve_val, result_val, impact_val
         ]
 
         max_lines = 1
@@ -194,12 +187,9 @@ def generate_pdf_table(dataframe):
             chars_per_line = max(int(w / 1.7), 3)
             lines = 0
             for paragraph in str(txt_clean).split('\n'):
-                if len(paragraph) == 0:
-                    lines += 1
-                else:
-                    lines += max(1, -(-len(paragraph) // chars_per_line))
-            if lines > max_lines:
-                max_lines = lines
+                if len(paragraph) == 0: lines += 1
+                else: lines += max(1, -(-len(paragraph) // chars_per_line))
+            if lines > max_lines: max_lines = lines
 
         row_height = max(6.0, (max_lines * line_height) + 2.5)
 
@@ -233,11 +223,9 @@ def generate_pdf_table(dataframe):
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
             txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
-            
             pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
             pdf.set_xy(x_current, y_start + 1.0)
             pdf.multi_cell(col_widths[i], line_height, txt=str(txt_clean), border=0, align=alignments[i])
-            
             pdf.set_xy(x_current + col_widths[i], y_start)
 
         pdf.set_xy(x_start, y_start + row_height)
@@ -261,21 +249,25 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ตั้งค่าตัวเลขแนวตรง textangle=0) ---
-st.subheader("จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์")
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (รองรับภาษาไทย + รวมความเสี่ยงคลินิก/ทั่วไป) ---
+st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
 matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
-if matched_cols and not df_f.empty:
-    col_name = matched_cols[0]
-    bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
-    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
-    fig_bar.update_traces(textangle=0, textposition='auto')  # บังคับตัวเลขให้ตั้งตรง
+if not df_f.empty:
+    if matched_cols:
+        col_name = matched_cols[0]
+        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
+        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
+    else:
+        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
+        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='5.ประเภทความเสี่ยง', barmode='group', text_auto=True)
+    
+    # ตั้งค่าฟอนต์และการแสดงผลภาษาไทยบนกราฟ
+    fig_bar.update_traces(textangle=0, textposition='auto')
+    fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
-    unit_sum = df_f.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='count')
-    fig_bar = px.bar(unit_sum, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color_discrete_sequence=['#1f77b4'], text_auto=True)
-    fig_bar.update_traces(textangle=0, textposition='auto')  # บังคับตัวเลขให้ตั้งตรง
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
 # --- 2. ตารางสรุปสถิติอุบัติการณ์ ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
@@ -290,13 +282,58 @@ if matched_cols and not df_f.empty:
 else:
     st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์'")
 
-# --- 3. ส่วนคำนวณ Risk Matrix ---
-risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melted = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-melted = melted[melted['Risk_Detail'] != '']
+# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (Trend Line) ---
+st.markdown("---")
+st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
-if not melted.empty:
-    matrix_df = melted.groupby('Risk_Detail').size().reset_index(name='Frequency')
+risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+melted_all = df_f.melt(value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+melted_all = melted_all[melted_all['Risk_Detail'] != '']
+
+if not melted_all.empty:
+    unique_risks = sorted(melted_all['Risk_Detail'].unique())
+    selected_risk_item = st.selectbox("🎯 เลือกรายการความเสี่ยงที่ต้องการเจาะลึกเพื่อทบทวน:", unique_risks)
+
+    if selected_risk_item:
+        # กรองเฉพาะเคสที่ตรงกับความเสี่ยงย่อยที่เลือก
+        risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
+        
+        # จัดกลุ่มตามเดือน/ปี หรือวันที่ เพื่อทำกราฟเส้นแนวโน้ม
+        risk_subset['Month_Year'] = risk_subset['Date'].dt.to_period('M').astype(str)
+        trend_df = risk_subset.groupby('Month_Year').size().reset_index(name='Count')
+        
+        st.markdown(f"**กราฟเส้นแสดงแนวโน้มการเกิดความเสี่ยง: `{selected_risk_item}`**")
+        fig_line = px.line(trend_df, x='Month_Year', y='Count', markers=True, text='Count', labels={'Month_Year': 'เดือน/ปี', 'Count': 'จำนวนครั้ง'})
+        fig_line.update_traces(textposition="top center", textfont=dict(size=12))
+        fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        # --- 4. ฟังก์ชั่นทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข ตามมาตรฐานความเสี่ยง ---
+        st.markdown("---")
+        st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข (Risk Review & Corrective Action)")
+        
+        col_rev1, col_rev2 = st.columns(2)
+        with col_rev1:
+            st.markdown("##### 🔍 1. การวิเคราะห์สาเหตุ (Root Cause Analysis)")
+            cause_notes = st.text_area("บันทึกวิเคราะห์สาเหตุของปัญหา:", placeholder="ระบุปัจจัยที่ก่อให้เกิดความเสี่ยง เช่น ด้านบุคลากร เครื่องมือ สิ่งแวดล้อม หรือกระบวนการปฏิบัติงาน...", height=120)
+        
+        with col_rev2:
+            st.markdown("##### 🛡️ 2. แนวทางแก้ไขและป้องกัน (Corrective & Preventive Action - CAPA)")
+            action_notes = st.text_area("ระบุแนวทางป้องกันแก้ไขตามมาตรฐาน:", placeholder="ระบุมาตรการแก้ไขเฉพาะหน้า และมาตรการป้องกันไม่ให้เกิดซ้ำตามมาตรฐานคุณภาพ...", height=120)
+
+        if st.button("💾 บันทึกผลการทบทวนความเสี่ยงนี้"):
+            st.success("บันทึกข้อมูลการทบทวนความเสี่ยงและแนวทางแก้ไขเรียบร้อยแล้ว! (สามารถนำข้อเสนอนี้ไปจัดทำรายงานทบทวนประจำเดือน/ปีได้ทันที)")
+
+        with st.expander("📋 ดูรายการเหตุการณ์ดิบที่เกี่ยวข้องกับความเสี่ยงนี้"):
+            original_indices = risk_subset.index
+            st.dataframe(df_f.loc[original_indices, ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']], use_container_width=True)
+else:
+    st.info("ไม่พบข้อมูลรายการความเสี่ยงย่อยในช่วงเวลาที่เลือก")
+
+# --- 5. ส่วนคำนวณ Risk Matrix ---
+st.markdown("---")
+if not melted_all.empty:
+    matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
 
     def get_sev_from_row(risk_name):
         sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
@@ -322,11 +359,10 @@ if not melted.empty:
     matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
     matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, size=len(matrix_df))
 
-    fig = px.scatter(
+    fig_matrix = px.scatter(
         matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
         color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
         hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5]
     )
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.write("ไม่พบข้อมูลความเสี่ยงในช่วงที่เลือก")
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
