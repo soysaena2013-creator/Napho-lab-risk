@@ -266,15 +266,15 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน (แสดงความเสี่ยงทั่วไป และความเสี่ยงทางคลินิก [แยก Miss / Near Miss ในแท่งคลินิก]) ---
+# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน (แสดงเฉพาะ Miss, Near Miss และ ความเสี่ยงทั่วไป ไม่มีสีแดงแปลกปลอม) ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
     
-    # ฟังก์ชันกำหนดป้ายกำกับย่อยในแต่ละหน่วยงาน
-    def get_unit_bar_category(row):
+    # กรองและจัดหมวดหมู่ให้ชัดเจนเฉพาะ Miss, Near Miss และ ความเสี่ยงทั่วไป เท่านั้น
+    def get_clean_unit_category(row):
         risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
         if 'คลินิก' in risk_type:
             if matched_event_cols:
@@ -283,25 +283,33 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
                     return 'Miss (ทางคลินิก)'
                 elif 'Near Miss' in ev_val:
                     return 'Near Miss (ทางคลินิก)'
-            return 'คลินิก (อื่นๆ)'
+            return None # ตัดข้อมูลคลินิกอื่นๆ ที่ไม่มี Miss / Near Miss ออกเพื่อไม่ให้เกิดสีแดง
         else:
-            # ดึงประเภทความเสี่ยงทั่วไปมาแสดง หรือใช้คำว่า 'ความเสี่ยงทั่วไป'
-            general_type = risk_type if risk_type and risk_type != 'nan' else 'ความเสี่ยงทั่วไป'
-            return f"ทั่วไป: {general_type}"
+            return 'ความเสี่ยงทั่วไป'
 
-    df_f['Unit_Bar_Group'] = df_f.apply(get_unit_bar_category, axis=1)
-
-    # จัดกลุ่มนับจำนวนตาม หน่วยงาน และ ประเภทกลุ่มย่อย
-    bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Unit_Bar_Group']).size().reset_index(name='count')
+    df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
     
+    # ตัดแถวที่เป็น None ทิ้ง
+    clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
+
+    bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
+    
+    # กำหนดสีเฉพาะกลุ่มให้ตรงกัน (Miss = น้ำเงินเข้ม, Near Miss = น้ำเงินอ่อน, ความเสี่ยงทั่วไป = เขียว/เทา ตามต้องการ)
+    color_map = {
+        'Miss (ทางคลินิก)': '#1f77b4',
+        'Near Miss (ทางคลินิก)': '#aec7e8',
+        'ความเสี่ยงทั่วไป': '#2ca02c'
+    }
+
     fig_bar = px.bar(
         bar_df, 
         x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
         y='count', 
-        color='Unit_Bar_Group', 
+        color='Clean_Group', 
         barmode='stack', 
         text_auto=True,
-        labels={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน', 'count': 'จำนวนครั้ง', 'Unit_Bar_Group': 'ประเภท / รูปแบบเหตุการณ์'}
+        color_discrete_map=color_map,
+        labels={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน', 'count': 'จำนวนครั้ง', 'Clean_Group': 'ประเภทความเสี่ยง'}
     )
     
     fig_bar.update_traces(textangle=0, textposition='inside')
@@ -313,7 +321,7 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
             tickmode='array'
         ),
         margin=dict(b=90),
-        legend=dict(title="ประเภทความเสี่ยง / รูปแบบเหตุการณ์")
+        legend=dict(title="ประเภทความเสี่ยง")
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
@@ -321,8 +329,8 @@ else:
 
 # --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามหน่วยงาน ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
-if not df_f.empty and 'Unit_Bar_Group' in df_f.columns:
-    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Unit_Bar_Group']).size().unstack(fill_value=0)
+if not df_f.empty and 'Clean_Group' in df_f.columns:
+    stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
         if col != 'รวม':
