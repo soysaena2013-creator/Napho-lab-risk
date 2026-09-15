@@ -330,9 +330,9 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-# --- 4. ตารางสรุป Risk Matrix (คำนวณตามช่วงเวลาและเงื่อนไขที่เลือก) ---
+# --- 4. ตารางและแผนภูมิ Risk Matrix (นำกลับมาแสดงผลครบถ้วนตามต้นฉบับ) ---
 st.markdown("---")
-st.subheader("📋 ตารางประเมินระดับความเสี่ยง (Risk Matrix Summary)")
+st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
 if not melted_all.empty:
     matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
@@ -348,23 +348,38 @@ if not melted_all.empty:
     matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
 
-    display_matrix_df = matrix_df[['Risk_Detail', 'Frequency', 'Sev_Raw', 'Risk_Matrix', 'Risk_Level']].rename(columns={
-        'Risk_Detail': 'รายการความเสี่ยง',
-        'Frequency': 'ความถี่ (Count)',
-        'Sev_Raw': 'ระดับความรุนแรง',
-        'Risk_Matrix': 'คะแนน Matrix',
-        'Risk_Level': 'ระดับความเสี่ยง'
-    }).sort_values(by='คะแนน Matrix', ascending=False)
+    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+    display_df = matrix_df.copy()
+    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
 
-    st.dataframe(display_matrix_df, use_container_width=True)
+    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']].rename(columns={
+        'Risk_Detail': 'รายการความเสี่ยงย่อย',
+        'Frequency': 'ความถี่',
+        'Freq_Score': 'คะแนนความถี่',
+        'Sev_Score': 'คะแนนความรุนแรง',
+        'Risk_Matrix': 'คะแนนรวม Matrix'
+    }), use_container_width=True)
+
+    st.subheader("🗺️ แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+
+    fig_matrix = px.scatter(
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5],
+        labels={'x_jitter': 'คะแนนความถี่ (Frequency Score)', 'y_jitter': 'คะแนนความรุนแรง (Severity Score)'}
+    )
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
 
 # --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง ตามช่วงเวลาที่เลือก) & จัดเก็บเอกสารคุณภาพ PDF ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงระดับสูง (สีส้ม/สีแดง) ค้นหาสาเหตุ (ก้างปลา) และจัดทำเอกสารคุณภาพ PDF")
 
 if not melted_all.empty:
-    # กรองเฉพาะความเสี่ยงที่มีระดับเป็น สีส้ม หรือ สีแดง จากชุดข้อมูลที่เลือกผ่านช่วงเวลาใน Sidebar
     high_risk_df = matrix_df[matrix_df['Risk_Level'].isin(['สูง (สีส้ม)', 'สูงมาก (สีแดง)'])]
 
     if not high_risk_df.empty:
