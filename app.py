@@ -330,13 +330,13 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-# --- 4. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง) & จัดเก็บเอกสารคุณภาพ PDF ---
+# --- 4. ตารางสรุป Risk Matrix (นำกลับมาให้แล้วครับ) ---
 st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ (ก้างปลา) และจัดทำเอกสารคุณภาพ PDF")
+st.subheader("📋 ตารางประเมินระดับความเสี่ยง (Risk Matrix Summary)")
 
 if not melted_all.empty:
-    # คำนวณ Risk Matrix เพื่อกรองเฉพาะลูกบอลสีส้มและสีแดงในช่วงเวลานั้นๆ
     matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
+    
     def get_sev_from_row(risk_name):
         sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
         if not sev_col: return 'A'
@@ -349,7 +349,21 @@ if not melted_all.empty:
     matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
     matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
 
-    # กรองเฉพาะความเสี่ยงระดับสูง (สีส้ม และ สีแดง)
+    display_matrix_df = matrix_df[['Risk_Detail', 'Frequency', 'Sev_Raw', 'Risk_Matrix', 'Risk_Level']].rename(columns={
+        'Risk_Detail': 'รายการความเสี่ยง',
+        'Frequency': 'ความถี่ (Count)',
+        'Sev_Raw': 'ระดับความรุนแรง',
+        'Risk_Matrix': 'คะแนน Matrix',
+        'Risk_Level': 'ระดับความเสี่ยง'
+    }).sort_values(by='คะแนน Matrix', ascending=False)
+
+    st.dataframe(display_matrix_df, use_container_width=True)
+
+# --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง) & จัดเก็บเอกสารคุณภาพ PDF ---
+st.markdown("---")
+st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยง ค้นหาสาเหตุ (ก้างปลา) และจัดทำเอกสารคุณภาพ PDF")
+
+if not melted_all.empty:
     high_risk_df = matrix_df[matrix_df['Risk_Level'].isin(['สูง (สีส้ม)', 'สูงมาก (สีแดง)'])]
 
     if not high_risk_df.empty:
