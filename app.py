@@ -273,7 +273,6 @@ matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุ
 
 if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
     
-    # กรองและจัดหมวดหมู่ให้ชัดเจนเฉพาะ Miss, Near Miss และ ความเสี่ยงทั่วไป เท่านั้น
     def get_clean_unit_category(row):
         risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
         if 'คลินิก' in risk_type:
@@ -283,18 +282,15 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
                     return 'Miss (ทางคลินิก)'
                 elif 'Near Miss' in ev_val:
                     return 'Near Miss (ทางคลินิก)'
-            return None # ตัดข้อมูลคลินิกอื่นๆ ที่ไม่มี Miss / Near Miss ออกเพื่อไม่ให้เกิดสีแดง
+            return None 
         else:
             return 'ความเสี่ยงทั่วไป'
 
     df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
-    
-    # ตัดแถวที่เป็น None ทิ้ง
     clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
 
     bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
     
-    # กำหนดสีเฉพาะกลุ่มให้ตรงกัน (Miss = น้ำเงินเข้ม, Near Miss = น้ำเงินอ่อน, ความเสี่ยงทั่วไป = เขียว/เทา ตามต้องการ)
     color_map = {
         'Miss (ทางคลินิก)': '#1f77b4',
         'Near Miss (ทางคลินิก)': '#aec7e8',
@@ -339,7 +335,7 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม ---
+# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (แสดงผลรายเดือนเท่านั้น) ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
@@ -360,13 +356,34 @@ if not melted_all.empty:
     if selected_risk_item:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
-        risk_subset['Month_Year'] = risk_subset['Date'].dt.to_period('M').astype(str)
-        trend_df = risk_subset.groupby('Month_Year').size().reset_index(name='Count')
+        # จัดกลุ่มและแสดงผลเป็นรายเดือน ( Month - Year ) โดยใช้ชื่อเดือนภาษาไทยหรือรูปแบบปี-เดือนที่อ่านง่าย
+        thai_months = {
+            1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 
+            5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 
+            9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค."
+        }
         
-        st.markdown(f"**กราฟเส้นแสดงแนวโน้มการเกิดความเสี่ยง: `{selected_risk_item}`**")
-        fig_line = px.line(trend_df, x='Month_Year', y='Count', markers=True, text='Count', labels={'Month_Year': 'เดือน/ปี', 'Count': 'จำนวนครั้ง'})
+        risk_subset['Sort_Key'] = risk_subset['Date'].dt.to_period('M')
+        risk_subset['Month_Label'] = risk_subset['Date'].dt.month.map(thai_months) + " " + (risk_subset['Date'].dt.year + 543).astype(str)
+        
+        # จัดกลุ่มนับจำนวนรวมตามเดือน พร้อมเรียงลำดับตามเวลาจริง
+        trend_df = risk_subset.groupby(['Sort_Key', 'Month_Label']).size().reset_index(name='Count')
+        trend_df = trend_df.sort_values('Sort_Key')
+        
+        st.markdown(f"**กราฟเส้นแสดงแนวโน้มรายเดือน: `{selected_risk_item}`**")
+        fig_line = px.line(
+            trend_df, 
+            x='Month_Label', 
+            y='Count', 
+            markers=True, 
+            text='Count', 
+            labels={'Month_Label': 'เดือน/ปี', 'Count': 'จำนวนครั้ง'}
+        )
         fig_line.update_traces(textposition="top center", textfont=dict(size=12))
-        fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+        fig_line.update_layout(
+            font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
+            xaxis=dict(type='category') # บังคับให้แกน X แสดงผลเป็นหมวดหมู่เดือน ไม่ไล่วันที่
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
         # --- 4. ฟังก์ชั่นทบทวนความเสี่ยง ค้นหาสาเหตุ และแนวทางแก้ไข ---
