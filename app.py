@@ -26,7 +26,6 @@ def get_sev_score(text):
     elif any(x in text for x in ['C', 'D']): return 2
     return 1
 
-# ฟังก์ชันคำนวณปีงบประมาณไทย (ตุลาคม - กันยายน)
 def get_thai_budget_year(date):
     if pd.isnull(date): return None
     if date.month >= 10:
@@ -37,7 +36,7 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# 1. โหลดข้อมูล (พร้อมทำความสะอาดช่องว่างและหัวคอลัมน์เพื่อไม่ให้ข้อมูลตกหล่น)
+# 1. โหลดข้อมูลและคลีนข้อมูล (แก้ปัญหาช่องว่างและข้อความภาษาไทยตกหล่น)
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -47,12 +46,14 @@ def load_data():
         st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
         return pd.DataFrame()
     
-    # ตัดช่องว่างหัวคอลัมน์และข้อมูลที่เป็นข้อความ
+    # ทำความสะอาดชื่อหัวคอลัมน์ทั้งหมด
     df.columns = df.columns.str.strip()
-    if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df.columns:
-        df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'] = df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].astype(str).str.strip()
-    if '5.ประเภทความเสี่ยง' in df.columns:
-        df['5.ประเภทความเสี่ยง'] = df['5.ประเภทความเสี่ยง'].astype(str).str.strip()
+    
+    # ทำความสะอาดข้อมูลที่เป็นข้อความทั้งหมดเพื่อป้องกันปัญหาช่องว่างแฝง (เช่น "ยานพาหนะ ")
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].astype(str).str.strip()
+        # แปลง 'nan' กลับเป็นค่าว่างเพื่อความถูกต้อง
+        df[col] = df[col].replace('nan', np.nan)
         
     df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
