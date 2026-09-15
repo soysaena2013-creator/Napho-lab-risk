@@ -266,7 +266,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน (แสดงเฉพาะ Miss, Near Miss และ ความเสี่ยงทั่วไป ไม่มีสีแดงแปลกปลอม) ---
+# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
@@ -335,12 +335,12 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (แสดงผลรายเดือนเท่านั้น) ---
+# --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม (แสดงผลครบทุกเดือนตามปีงบประมาณ) ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melt_id_vars = ['Date', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
+melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
 melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
 
 if not df_f.empty and risk_cols:
@@ -356,33 +356,62 @@ if not melted_all.empty:
     if selected_risk_item:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
-        # จัดกลุ่มและแสดงผลเป็นรายเดือน ( Month - Year ) โดยใช้ชื่อเดือนภาษาไทยหรือรูปแบบปี-เดือนที่อ่านง่าย
         thai_months = {
             1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 
             5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 
             9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค."
         }
         
-        risk_subset['Sort_Key'] = risk_subset['Date'].dt.to_period('M')
-        risk_subset['Month_Label'] = risk_subset['Date'].dt.month.map(thai_months) + " " + (risk_subset['Date'].dt.year + 543).astype(str)
+        # จัดกลุ่มนับจำนวนจริงรายเดือน
+        risk_subset['Month'] = risk_subset['Date'].dt.month
+        risk_subset['Year'] = risk_subset['Date'].dt.year
         
-        # จัดกลุ่มนับจำนวนรวมตามเดือน พร้อมเรียงลำดับตามเวลาจริง
-        trend_df = risk_subset.groupby(['Sort_Key', 'Month_Label']).size().reset_index(name='Count')
-        trend_df = trend_df.sort_values('Sort_Key')
+        actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Year', 'Month']).size().reset_index(name='Count')
         
-        st.markdown(f"**กราฟเส้นแสดงแนวโน้มรายเดือน: `{selected_risk_item}`**")
+        # สร้างโครงสร้างเดือนปีงบประมาณไทยให้ครบทั้ง 12 เดือน (ต.ค. ถึง ก.ย.) ของปีงบประมาณที่เกี่ยวข้อง
+        budget_years_in_subset = risk_subset['Thai_Budget_Year'].dropna().unique()
+        full_grid = []
+        for b_year in budget_years_in_subset:
+            # ปีงบประมาณ พ.ศ. X แปลงเป็น ค.ศ. เริ่มจาก ต.ค. (พ.ศ. X-1) ถึง ก.ย. (พ.ศ. X)
+            ce_year = int(b_year) - 543
+            months_seq = [
+                (ce_year - 1, 10), (ce_year - 1, 11), (ce_year - 1, 12),
+                (ce_year, 1), (ce_year, 2), (ce_year, 3), 
+                (ce_year, 4), (ce_year, 5), (ce_year, 6), 
+                (ce_year, 7), (ce_year, 8), (ce_year, 9)
+            ]
+            for y, m in months_seq:
+                m_label = f"{thai_months[m]} {y + 543}"
+                sort_key = f"{y}-{m:02d}"
+                full_grid.append({
+                    'Thai_Budget_Year': b_year,
+                    'Year': y,
+                    'Month': m,
+                    'Month_Label': m_label,
+                    'Sort_Key': sort_key
+                })
+        
+        grid_df = pd.DataFrame(full_grid)
+        
+        # Merge กับข้อมูลจริง เพื่อให้เดือนที่ไม่มีอุบัติการณ์แสดงค่าเป็น 0
+        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Year', 'Month'], how='left')
+        merged_trend['Count'] = merged_trend['Count'].fillna(0)
+        merged_trend = merged_trend.sort_values('Sort_Key')
+        
+        st.markdown(f"**กราฟเส้นแสดงแนวโน้มรายเดือนตลอดปีงบประมาณ: `{selected_risk_item}`**")
         fig_line = px.line(
-            trend_df, 
+            merged_trend, 
             x='Month_Label', 
             y='Count', 
             markers=True, 
             text='Count', 
-            labels={'Month_Label': 'เดือน/ปี', 'Count': 'จำนวนครั้ง'}
+            labels={'Month_Label': 'เดือน/ปีงบประมาณ', 'Count': 'จำนวนครั้ง'}
         )
         fig_line.update_traces(textposition="top center", textfont=dict(size=12))
         fig_line.update_layout(
             font=dict(family="Tahoma, Sarabun, sans-serif", size=14),
-            xaxis=dict(type='category') # บังคับให้แกน X แสดงผลเป็นหมวดหมู่เดือน ไม่ไล่วันที่
+            xaxis=dict(type='category', tickangle=-30),
+            margin=dict(b=60)
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
