@@ -266,18 +266,20 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงาน PDF (�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง ---
-st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและรูปแบบเหตุการณ์ (ความเสี่ยงทั่วไป / คลินิก)")
-matched_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
+# --- 1. แผนภูมิแท่งแยกตามหน่วยงานและประเภทความเสี่ยง (ครอบคลุมทั้งความเสี่ยงทั่วไปและความเสี่ยงทางคลินิก) ---
+st.subheader("📊 จำนวนความเสี่ยงแยกตามหน่วยงานและประเภทความเสี่ยง (ความเสี่ยงทั่วไป / ความเสี่ยงทางคลินิก)")
 
-if not df_f.empty:
-    if matched_cols:
-        col_name = matched_cols[0]
-        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().reset_index(name='count')
-        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color=col_name, barmode='group', text_auto=True)
-    else:
-        bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
-        fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='5.ประเภทความเสี่ยง', barmode='group', text_auto=True)
+if not df_f.empty and '5.ประเภทความเสี่ยง' in df_f.columns and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns:
+    bar_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().reset_index(name='count')
+    fig_bar = px.bar(
+        bar_df, 
+        x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 
+        y='count', 
+        color='5.ประเภทความเสี่ยง', 
+        barmode='group', 
+        text_auto=True,
+        labels={'4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน', 'count': 'จำนวนครั้ง', '5.ประเภทความเสี่ยง': 'ประเภทความเสี่ยง'}
+    )
     
     fig_bar.update_traces(textangle=0, textposition='auto')
     fig_bar.update_layout(
@@ -293,18 +295,17 @@ if not df_f.empty:
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
-# --- 2. ตารางสรุปสถิติอุบัติการณ์ ---
-st.subheader("ตารางสรุปสถิติอุบัติการณ์ (Miss vs Near Miss)")
-if matched_cols and not df_f.empty:
-    col_name = matched_cols[0]
-    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', col_name]).size().unstack(fill_value=0)
+# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามประเภทความเสี่ยง ---
+st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามประเภทความเสี่ยง (ความเสี่ยงทั่วไป vs คลินิก)")
+if not df_f.empty and '5.ประเภทความเสี่ยง' in df_f.columns:
+    stats_df = df_f.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง']).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
         if col != 'รวม':
             stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
     st.dataframe(stats_df, use_container_width=True)
 else:
-    st.info("ไม่พบข้อมูลคอลัมน์ที่มีคำว่า 'รูปแบบเหตุการณ์'")
+    st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
 # --- 3. ฟังก์ชันเลือกดูตามรายการความเสี่ยง & กราฟเส้นแนวโน้ม ---
 st.markdown("---")
