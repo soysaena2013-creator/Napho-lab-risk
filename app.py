@@ -335,7 +335,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (ใช้ st.dataframe แบบกำหนดความสูงและรองรับเลื่อนซ้ายขวา)
+        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก (ปรับให้เต็มพื้นที่และตัดคำอัตโนมัติ)
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
@@ -365,7 +365,40 @@ if not melted_all.empty:
             sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
             if 'วันที่เกิด' in sub_df_display.columns:
                 sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
-            st.dataframe(sub_df_display, height=350, use_container_width=False)
+            
+            # แปลงเป็นตาราง HTML ที่กำหนดให้เต็มพื้นที่และตัดคำขึ้นบรรทัดใหม่ได้
+            html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
+            custom_css = """
+            <style>
+            .table-custom {
+                width: 100% !important;
+                border-collapse: collapse;
+                font-family: 'Sarabun', 'Tahoma', sans-serif;
+                font-size: 14px;
+            }
+            .table-custom th, .table-custom td {
+                border: 1px solid #ddd;
+                padding: 8px 12px;
+                text-align: left;
+                word-break: break-word;
+                white-space: normal;
+            }
+            .table-custom th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+                text-align: center;
+            }
+            .table-container {
+                max-height: 400px;
+                overflow-y: auto;
+                overflow-x: auto;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                margin-bottom: 20px;
+            }
+            </style>
+            """
+            st.markdown(f'<div class="table-container">{custom_css}{html_table}</div>', unsafe_allow_html=True)
         else:
             st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
 
