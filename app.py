@@ -335,7 +335,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # เพิ่มตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ พร้อมเปิดใช้งานการเลื่อนดู (Scrollable table)
+        # เพิ่มตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (รองรับเลื่อนซ้ายขวาและขึ้นลง)
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
@@ -365,7 +365,7 @@ if not melted_all.empty:
             sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
             if 'วันที่เกิด' in sub_df_display.columns:
                 sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
-            st.dataframe(sub_df_display, use_container_width=True, height=350)
+            st.dataframe(sub_df_display, use_container_width=False, height=350)
         else:
             st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
 
