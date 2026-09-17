@@ -110,7 +110,6 @@ if len(st.session_state['saved_capa_reports']) > 0:
             st.write(f"**ระดับ:** {report['risk_lvl']}")
             st.write(f"**บันทึกเมื่อ:** {report['timestamp']}")
             
-            # สร้าง PDF อีกครั้งเพื่อดาวน์โหลดจาก Sidebar
             def generate_capa_pdf_from_history(r):
                 pdf = FPDF(orientation='P', unit='mm', format='A4')
                 pdf.set_auto_page_break(auto=True, margin=15)
@@ -356,7 +355,7 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ และตารางรายละเอียดประกอบการทบทวน ---
+# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ (เปรียบเทียบซ้อนปีงบประมาณ) และตารางรายละเอียดประกอบการทบทวน ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
@@ -381,27 +380,58 @@ if not melted_all.empty:
 
     if selected_risk_item:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
-        thai_months = {1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค."}
-        risk_subset['Month'] = risk_subset['Date'].dt.month
-        risk_subset['Year'] = risk_subset['Date'].dt.year
-        actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Year', 'Month']).size().reset_index(name='Count')
         
-        budget_years_in_subset = risk_subset['Thai_Budget_Year'].dropna().unique()
+        # จัดเรียงลำดับเดือนตามปีงบประมาณ (ต.ค. เป็นเดือนแรก = 1 ถึง ก.ย. = 12)
+        def get_budget_month_order(date):
+            if pd.isnull(date): return 0
+            m = date.month
+            return m - 9 if m >= 10 else m + 3
+
+        risk_subset['Budget_Month_Index'] = risk_subset['Date'].apply(get_budget_month_order)
+        
+        thai_budget_months = {
+            1: "ต.ค.", 2: "พ.ย.", 3: "ธ.ค.", 4: "ม.ค.", 
+            5: "ก.พ.", 6: "มี.ค.", 7: "เม.ย.", 8: "พ.ค.", 
+            9: "มิ.ย.", 10: "ก.ค.", 11: "ส.ค.", 12: "ก.ย."
+        }
+        risk_subset['Month_Label'] = risk_subset['Budget_Month_Index'].map(thai_budget_months)
+        
+        # จัดกลุ่มนับข้อมูลตาม ปีงบประมาณ และ เดือนตามปีงบประมาณ
+        actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Budget_Month_Index', 'Month_Label']).size().reset_index(name='Count')
+        
+        # สร้างโครงสร้างกริดให้ครบทุกเดือน (1-12) สำหรับทุกปีงบประมาณที่มีในข้อมูล
+        budget_years_in_subset = sorted(risk_subset['Thai_Budget_Year'].dropna().unique())
         full_grid = []
         for b_year in budget_years_in_subset:
-            ce_year = int(b_year) - 543
-            months_seq = [(ce_year - 1, 10), (ce_year - 1, 11), (ce_year - 1, 12), (ce_year, 1), (ce_year, 2), (ce_year, 3), (ce_year, 4), (ce_year, 5), (ce_year, 6), (ce_year, 7), (ce_year, 8), (ce_year, 9)]
-            for y, m in months_seq:
-                full_grid.append({'Thai_Budget_Year': b_year, 'Year': y, 'Month': m, 'Month_Label': f"{thai_months[m]} {y + 543}", 'Sort_Key': f"{y}-{m:02d}"})
+            for idx_m in range(1, 13):
+                full_grid.append({
+                    'Thai_Budget_Year': int(b_year), 
+                    'Budget_Month_Index': idx_m, 
+                    'Month_Label': thai_budget_months[idx_m]
+                })
         
         grid_df = pd.DataFrame(full_grid)
-        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Year', 'Month'], how='left').fillna({'Count': 0})
-        merged_trend = merged_trend.sort_values('Sort_Key')
+        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Budget_Month_Index', 'Month_Label'], how='left').fillna({'Count': 0})
+        merged_trend = merged_trend.sort_values(['Thai_Budget_Year', 'Budget_Month_Index'])
+        merged_trend['Year_Label_Str'] = "ปีงบ " + merged_trend['Thai_Budget_Year'].astype(str)
         
-        st.markdown(f"**กราฟเส้นแสดงแนวโน้มรายเดือนตลอดปีงบประมาณ: `{selected_risk_item}`**")
-        fig_line = px.line(merged_trend, x='Month_Label', y='Count', markers=True, text='Count', labels={'Month_Label': 'เดือน/ปีงบประมาณ', 'Count': 'จำนวนครั้ง'})
-        fig_line.update_traces(textposition="top center", textfont=dict(size=12))
-        fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
+        st.markdown(f"**กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ: `{selected_risk_item}`**")
+        
+        # พล็อตเส้นกราฟซ้อนกันแยกสีตามปีงบประมาณ
+        fig_line = px.line(
+            merged_trend, 
+            x='Month_Label', 
+            y='Count', 
+            color='Year_Label_Str', 
+            markers=True, 
+            text='Count',
+            labels={'Month_Label': 'เดือน (ปีงบประมาณ)', 'Count': 'จำนวนครั้ง', 'Year_Label_Str': 'ปีงบประมาณ'}
+        )
+        fig_line.update_traces(textposition="top center", textfont=dict(size=11))
+        fig_line.update_layout(
+            font=dict(family="Tahoma, Sarabun, sans-serif", size=14), 
+            xaxis=dict(type='category', categoryorder='array', categoryorder_array=list(thai_budget_months.values()))
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
         # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
@@ -584,7 +614,6 @@ if not melted_all.empty:
 
             if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) สำหรับเก็บเข้าระบบ"):
                 try:
-                    # บันทึกลงใน Session State ไว้ดูย้อนหลังที่ Sidebar
                     report_data = {
                         'risk_name': selected_high_risk,
                         'risk_lvl': current_row['Risk_Level'],
@@ -599,7 +628,6 @@ if not melted_all.empty:
                     }
                     st.session_state['saved_capa_reports'].append(report_data)
 
-                    # สร้างไฟล์ PDF สำหรับดาวน์โหลดทันที
                     pdf_file_path = generate_capa_pdf(
                         selected_high_risk, current_row['Risk_Level'], 
                         fish_man, fish_machine, fish_material, fish_method, fish_env,
@@ -614,7 +642,7 @@ if not melted_all.empty:
                             mime="application/pdf"
                         )
                     st.success("บันทึกข้อมูลเข้าสู่ระบบเรียบร้อยแล้ว! (คุณสามารถเรียกดูย้อนหลังได้จากเมนูด้านซ้าย Sidebar)")
-                    st.rerun() # รีรันเพื่อให้ Sidebar อัปเดตรายการทันที
+                    st.rerun()
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
     else:
