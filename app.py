@@ -101,6 +101,22 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
+# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุเกิดจาก (U) อย่างแม่นยำ ---
+def extract_cause_values(row, columns_list):
+    cause_text = ""
+    for col in columns_list:
+        col_str = str(col).strip()
+        if 'สาเหตุ' in col_str or col_str.startswith('U.') or ' U ' in col_str or col_str == 'U':
+            val = str(row.get(col, ''))
+            if val and val != 'nan':
+                cause_text = val
+                break
+    # Fallback กรณีไม่พบชื่อคอลัมน์ ให้ใช้ index 20 หรือค้นหาคอลัมน์ใกล้เคียง
+    if not cause_text or cause_text == 'nan':
+        if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan':
+            cause_text = str(row.iloc[20])
+    return cause_text if cause_text and cause_text != 'nan' else '-'
+
 # --- ฟังก์ชันช่วยดึงข้อมูล V และ AA อย่างแม่นยำ ---
 def extract_v_aa_values(row, columns_list):
     v_text, aa_text = "", ""
@@ -113,9 +129,7 @@ def extract_v_aa_values(row, columns_list):
             val = str(row.get(col, ''))
             if val and val != 'nan': aa_text = val
     
-    # Fallback หากไม่พบชื่อคอลัมน์ตรงๆ ให้ใช้ตำแหน่งคอลัมน์ทางเลือกที่ถูกต้อง
     if not v_text and not aa_text:
-        # สมมติฐานตำแหน่ง index สำรอง ปรับเปลี่ยนได้ตามโครงสร้างจริง
         for idx_col, val_col in enumerate(row):
             col_name = str(columns_list[idx_col])
             if ('แก้ไข' in col_name or 'เบื้องต้น' in col_name) and 'เฉพาะหน้า' not in col_name and 'ผล' not in col_name:
@@ -258,9 +272,10 @@ def generate_pdf_table(dataframe):
                 risk_desc = str(row[col])
                 break
 
-        cause_val = str(row.iloc[20]) if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan' else '-'
+        # ใช้ฟังก์ชันดึงค่าสาเหตุเกิดจาก (U)
+        cause_val = extract_cause_values(row, dataframe.columns)
 
-        # ใช้ฟังก์ชันดึงค่า V & AA สำหรับออกรายงาน PDF ด้วย
+        # ใช้ฟังก์ชันดึงค่า V & AA
         solve_val = extract_v_aa_values(row, dataframe.columns)
 
         level_val = str(row.get('LEVEL', '-'))
@@ -457,9 +472,10 @@ if not melted_all.empty:
             u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
             shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
             
-            cause_text = str(r.iloc[20]) if len(r) > 20 and pd.notnull(r.iloc[20]) and str(r.iloc[20]) != 'nan' else '-'
+            # ใช้ฟังก์ชันดึงค่าสาเหตุเกิดจาก (U)
+            cause_text = extract_cause_values(r, detail_view_df.columns)
             
-            # เรียกใช้ฟังก์ชันดึงค่า V & AA ที่แก้ไขแล้ว
+            # ใช้ฟังก์ชันดึงค่า V & AA
             solve_text = extract_v_aa_values(r, detail_view_df.columns)
             
             imm_fix = '-'
