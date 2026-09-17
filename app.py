@@ -101,6 +101,31 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
+# --- ฟังก์ชันช่วยดึงข้อมูล V และ AA อย่างแม่นยำ ---
+def extract_v_aa_values(row, columns_list):
+    v_text, aa_text = "", ""
+    for col in columns_list:
+        col_str = str(col).strip()
+        if col_str.startswith('V.') or ' V ' in col_str or col_str == 'V':
+            val = str(row.get(col, ''))
+            if val and val != 'nan': v_text = val
+        elif col_str.startswith('AA.') or ' AA ' in col_str or col_str == 'AA':
+            val = str(row.get(col, ''))
+            if val and val != 'nan': aa_text = val
+    
+    # Fallback หากไม่พบชื่อคอลัมน์ตรงๆ ให้ใช้ตำแหน่งคอลัมน์ทางเลือกที่ถูกต้อง
+    if not v_text and not aa_text:
+        # สมมติฐานตำแหน่ง index สำรอง ปรับเปลี่ยนได้ตามโครงสร้างจริง
+        for idx_col, val_col in enumerate(row):
+            col_name = str(columns_list[idx_col])
+            if ('แก้ไข' in col_name or 'เบื้องต้น' in col_name) and 'เฉพาะหน้า' not in col_name and 'ผล' not in col_name:
+                if pd.notnull(val_col) and str(val_col) != 'nan':
+                    v_text = str(val_col)
+                    break
+
+    solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
+    return solve_val if solve_val else '-'
+
 # --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
@@ -233,14 +258,10 @@ def generate_pdf_table(dataframe):
                 risk_desc = str(row[col])
                 break
 
-        # สาเหตุเกิดจาก (ดึงจากคอลัมน์ U หรือ Index 20)
         cause_val = str(row.iloc[20]) if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan' else '-'
 
-        # การแก้ไขเบื้องต้น (ดึงจากคอลัมน์ V และ AA หรือ Index 21 และ 26)
-        v_val = str(row.iloc[21]) if len(row) > 21 and pd.notnull(row.iloc[21]) and str(row.iloc[21]) != 'nan' else ''
-        aa_val = str(row.iloc[26]) if len(row) > 26 and pd.notnull(row.iloc[26]) and str(row.iloc[26]) != 'nan' else ''
-        solve_val = " / ".join([x for x in [v_val, aa_val] if x])
-        if not solve_val: solve_val = '-'
+        # ใช้ฟังก์ชันดึงค่า V & AA สำหรับออกรายงาน PDF ด้วย
+        solve_val = extract_v_aa_values(row, dataframe.columns)
 
         level_val = str(row.get('LEVEL', '-'))
         
@@ -436,14 +457,10 @@ if not melted_all.empty:
             u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
             shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
             
-            # ดึงสาเหตุเกิดจาก (คอลัมน์ U / Index 20)
             cause_text = str(r.iloc[20]) if len(r) > 20 and pd.notnull(r.iloc[20]) and str(r.iloc[20]) != 'nan' else '-'
             
-            # ดึงการแก้ไขเบื้องต้น / การแก้ปัญหาเบื้องต้น (รวมคอลัมน์ V และ AA / Index 21 และ 26)
-            v_text = str(r.iloc[21]) if len(r) > 21 and pd.notnull(r.iloc[21]) and str(r.iloc[21]) != 'nan' else ''
-            aa_text = str(r.iloc[26]) if len(r) > 26 and pd.notnull(r.iloc[26]) and str(r.iloc[26]) != 'nan' else ''
-            solve_text = " / ".join([x for x in [v_text, aa_text] if x])
-            if not solve_text: solve_text = '-'
+            # เรียกใช้ฟังก์ชันดึงค่า V & AA ที่แก้ไขแล้ว
+            solve_text = extract_v_aa_values(r, detail_view_df.columns)
             
             imm_fix = '-'
             for col in detail_view_df.columns:
@@ -648,7 +665,9 @@ if not melted_all.empty:
                     st.rerun()
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
+        else:
+            st.success("✨ ในช่วงเวลาและเงื่อนไขตัวกรองที่เลือก ไม่พบความเสี่ยงระดับสูง (สีส้มหรือสีแดง) ทุกอย่างอยู่ในเกณฑ์มาตรฐานที่ควบคุมได้ครับ!")
     else:
-        st.success("✨ ในช่วงเวลาและเงื่อนไขตัวกรองที่เลือก ไม่พบความเสี่ยงระดับสูง (สีส้มหรือสีแดง) ทุกอย่างอยู่ในเกณฑ์มาตรฐานที่ควบคุมได้ครับ!")
+        st.info("✨ ไม่มีรายการความเสี่ยงระดับสูงในช่วงเวลาที่เลือก")
 else:
-    st.info("ไม่พบข้อมูลความเสี่ยงในระบบ")
+    st.info("โปรดตรวจสอบข้อมูลในระบบ หรือเลือกเงื่อนไขตัวกรองใหม่อีกครั้ง")
