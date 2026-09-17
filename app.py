@@ -7,6 +7,7 @@ import requests
 from fpdf import FPDF
 import tempfile
 import os
+from datetime import datetime
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -37,6 +38,10 @@ def get_thai_budget_year(date):
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
+
+# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง ---
+if 'saved_capa_reports' not in st.session_state:
+    st.session_state['saved_capa_reports'] = []
 
 # 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
 @st.cache_data(ttl=1)
@@ -95,6 +100,70 @@ if not df.empty:
     if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
 else:
     df_f = pd.DataFrame()
+
+# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
+if len(st.session_state['saved_capa_reports']) > 0:
+    for idx, report in enumerate(st.session_state['saved_capa_reports']):
+        with st.sidebar.expander(f"🔹 {idx+1}. {report['risk_name'][:25]}..."):
+            st.write(f"**ระดับ:** {report['risk_lvl']}")
+            st.write(f"**บันทึกเมื่อ:** {report['timestamp']}")
+            
+            # สร้าง PDF อีกครั้งเพื่อดาวน์โหลดจาก Sidebar
+            def generate_capa_pdf_from_history(r):
+                pdf = FPDF(orientation='P', unit='mm', format='A4')
+                pdf.set_auto_page_break(auto=True, margin=15)
+                pdf.add_page()
+                
+                font_path = "Sarabun-Regular.ttf"
+                if os.path.exists(font_path):
+                    pdf.add_font("Sarabun", "", font_path)
+                    pdf.set_font("Sarabun", size=14)
+                else:
+                    pdf.set_font("Arial", size=14)
+
+                pdf.cell(0, 8, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
+                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+                pdf.cell(0, 6, txt="ระบบบริหารจัดการความเสี่ยงมาตรฐานห้องปฏิบัติการ (ISO 15189)", ln=True, align='C')
+                pdf.ln(5)
+
+                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+                pdf.cell(0, 7, txt=f"รายการความเสี่ยง: {r['risk_name']}", ln=True)
+                pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {r['risk_lvl']}", ln=True)
+                pdf.ln(3)
+
+                pdf.set_fill_color(230, 240, 250)
+                pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
+                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+                pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {r['man']}\n- เครื่องมือ (Machine): {r['machine']}\n- วัสดุ/สารเคมี (Material): {r['material']}\n- กระบวนการ (Method): {r['method']}\n- สิ่งแวดล้อม (Environment): {r['env']}")
+                pdf.ln(3)
+
+                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+                pdf.set_fill_color(230, 240, 250)
+                pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
+                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+                pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {r['corr_act']}\n- มาตรการป้องกันระยะยาว: {r['prev_act']}")
+                
+                tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+                pdf.output(tmp_pdf.name)
+                return tmp_pdf.name
+
+            hist_pdf_path = generate_capa_pdf_from_history(report)
+            with open(hist_pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    label=f"📥 ดาวน์โหลด PDF #{idx+1}",
+                    data=f,
+                    file_name=f"CAPA_History_{idx+1}.pdf",
+                    mime="application/pdf",
+                    key=f"dl_hist_{idx}"
+                )
+    
+    if st.sidebar.button("🗑️ ล้างประวัติทั้งหมด"):
+        st.session_state['saved_capa_reports'] = []
+        st.rerun()
+else:
+    st.sidebar.info("ยังไม่มีประวัติการบันทึกทบทวนความเสี่ยง")
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ")
 
@@ -335,7 +404,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก (ปรับให้เต็มพื้นที่และตัดคำอัตโนมัติ)
+        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
@@ -446,7 +515,7 @@ if not melted_all.empty:
     fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-# --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง ตามช่วงเวลาที่เลือก) & จัดเก็บเอกสารคุณภาพ PDF ---
+# --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง & บันทึกเก็บประวัติลง Sidebar ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงระดับสูง (สีส้ม/สีแดง) ค้นหาสาเหตุ (ก้างปลา 5M1E) และจัดทำเอกสารคุณภาพ PDF")
 
@@ -464,16 +533,16 @@ if not melted_all.empty:
             col_rev1, col_rev2 = st.columns(2)
             with col_rev1:
                 st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)")
-                fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
-                fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
-                fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด")
-                fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
-                fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน")
+                fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="input_man")
+                fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="input_machine")
+                fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="input_material")
+                fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="input_method")
+                fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="input_env")
             
             with col_rev2:
                 st.markdown("##### 🛡️ 2. มาตรการแก้ไขและป้องกัน (CAPA)")
-                corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
-                preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
+                corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="input_corr")
+                preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="input_prev")
 
             def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act):
                 pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -515,11 +584,28 @@ if not melted_all.empty:
 
             if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) สำหรับเก็บเข้าระบบ"):
                 try:
+                    # บันทึกลงใน Session State ไว้ดูย้อนหลังที่ Sidebar
+                    report_data = {
+                        'risk_name': selected_high_risk,
+                        'risk_lvl': current_row['Risk_Level'],
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'man': fish_man,
+                        'machine': fish_machine,
+                        'material': fish_material,
+                        'method': fish_method,
+                        'env': fish_env,
+                        'corr_act': corrective_action,
+                        'prev_act': preventive_action
+                    }
+                    st.session_state['saved_capa_reports'].append(report_data)
+
+                    # สร้างไฟล์ PDF สำหรับดาวน์โหลดทันที
                     pdf_file_path = generate_capa_pdf(
                         selected_high_risk, current_row['Risk_Level'], 
                         fish_man, fish_machine, fish_material, fish_method, fish_env,
                         corrective_action, preventive_action
                     )
+                    
                     with open(pdf_file_path, "rb") as f:
                         st.download_button(
                             label="📥 คลิกดาวน์โหลดเอกสาร PDF บันทึกความเสี่ยงนี้",
@@ -527,7 +613,8 @@ if not melted_all.empty:
                             file_name=f"CAPA_Report_{current_row['Risk_Matrix']}.pdf",
                             mime="application/pdf"
                         )
-                    st.success("บันทึกข้อมูลและเตรียมเอกสาร PDF สำหรับจัดเก็บเรียบร้อยแล้วครับ!")
+                    st.success("บันทึกข้อมูลเข้าสู่ระบบเรียบร้อยแล้ว! (คุณสามารถเรียกดูย้อนหลังได้จากเมนูด้านซ้าย Sidebar)")
+                    st.rerun() # รีรันเพื่อให้ Sidebar อัปเดตรายการทันที
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
     else:
