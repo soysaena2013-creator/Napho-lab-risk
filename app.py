@@ -335,7 +335,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # เพิ่มตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (รองรับเลื่อนซ้ายขวาและขึ้นลง)
+        # ตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (รองรับเลื่อนซ้าย-ขวาและขึ้น-ลง)
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
@@ -365,7 +365,38 @@ if not melted_all.empty:
             sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
             if 'วันที่เกิด' in sub_df_display.columns:
                 sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
-            st.dataframe(sub_df_display, use_container_width=False, height=350)
+            
+            # แปลงเป็นตาราง HTML พร้อมกำหนดให้มีแถบเลื่อนทั้งซ้าย-ขวา และขึ้น-ลง ความสูง 350px
+            html_table = sub_df_display.to_html(index=True, classes="table-custom", escape=False)
+            st.markdown(
+                f"""
+                <style>
+                .table-custom {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 14px;
+                    font-family: sans-serif;
+                }}
+                .table-custom th, .table-custom td {{
+                    border: 1px solid #e0e0e0;
+                    padding: 8px 12px;
+                    text-align: left;
+                    white-space: nowrap;
+                }}
+                .table-custom th {{
+                    background-color: #f0f2f6;
+                    color: #31333F;
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                }}
+                </style>
+                <div style="overflow-x: auto; overflow-y: auto; max-height: 350px; border: 1px solid #e0e0e0; border-radius: 4px;">
+                    {html_table}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         else:
             st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
 
