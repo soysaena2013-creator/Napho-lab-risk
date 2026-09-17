@@ -335,7 +335,7 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (รองรับเลื่อนซ้าย-ขวาและขึ้น-ลง)
+        # ตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ (ใช้ st.dataframe แบบกำหนดความสูงและรองรับเลื่อนซ้ายขวา)
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
@@ -365,38 +365,7 @@ if not melted_all.empty:
             sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
             if 'วันที่เกิด' in sub_df_display.columns:
                 sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
-            
-            # แปลงเป็นตาราง HTML พร้อมกำหนดให้มีแถบเลื่อนทั้งซ้าย-ขวา และขึ้น-ลง ความสูง 350px
-            html_table = sub_df_display.to_html(index=True, classes="table-custom", escape=False)
-            st.markdown(
-                f"""
-                <style>
-                .table-custom {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 14px;
-                    font-family: sans-serif;
-                }}
-                .table-custom th, .table-custom td {{
-                    border: 1px solid #e0e0e0;
-                    padding: 8px 12px;
-                    text-align: left;
-                    white-space: nowrap;
-                }}
-                .table-custom th {{
-                    background-color: #f0f2f6;
-                    color: #31333F;
-                    position: sticky;
-                    top: 0;
-                    z-index: 1;
-                }}
-                </style>
-                <div style="overflow-x: auto; overflow-y: auto; max-height: 350px; border: 1px solid #e0e0e0; border-radius: 4px;">
-                    {html_table}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            st.dataframe(sub_df_display, height=350, use_container_width=False)
         else:
             st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
 
@@ -462,7 +431,7 @@ if not melted_all.empty:
 
             col_rev1, col_rev2 = st.columns(2)
             with col_rev1:
-                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Fishbone Diagram - ก้างปลา)")
+                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา)")
                 fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
                 fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
                 fish_material = st.text_area("🧪 วัสดุ/สิ่งแวดล้อม (Material/Milieu):", "คุณภาพสิ่งส่งตรวจ / สิ่งแวดล้อมหน้างานมีความแออัด")
