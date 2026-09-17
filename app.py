@@ -189,17 +189,17 @@ def generate_pdf_table(dataframe):
     else:
         pdf.set_font("Arial", size=12)
 
-    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report (รายงานสรุปความเสี่ยงและรายละเอียด)", ln=True, align='C')
+    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report", ln=True, align='C')
     pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(2)
 
     headers = [
         "ลำดับ", "วันที่เกิด", "หน่วยงาน", "ช่วงเวร", "ความเสี่ยงที่เกิด", 
-        "ปัญหาที่พบ (S)", "LEVEL (T)", "สาเหตุเกิดจาก (U)", "การแก้ไขปัญหาเฉพาะหน้า",  
+        "LEVEL (T)", "สาเหตุเกิดจาก (U)", "การแก้ไขปัญหาเฉพาะหน้า",  
         "การแก้ไขเบื้องต้น", "ผลการแก้ไข (W)", "ผลกระทบต่อคนไข้ (X)"
     ]
-    col_widths = [9, 20, 22, 14, 28, 25, 11, 26, 28, 26, 28, 38] 
+    col_widths = [9, 20, 22, 14, 30, 11, 28, 28, 28, 28, 38] 
 
     pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
     pdf.set_fill_color(41, 128, 185)
@@ -233,16 +233,16 @@ def generate_pdf_table(dataframe):
                 risk_desc = str(row[col])
                 break
 
-        solve_val = str(row.get('การแก้ไขปัญหาเบื้องต้น', '-'))
-        if solve_val == '-' or solve_val == 'nan':
-            for col in dataframe.columns:
-                if any(k in str(col) for k in ['แก้ไข', 'การจัดการเบื้องต้น', 'Action']) and 'ปัญหา' not in str(col) and 'เฉพาะหน้า' not in str(col):
-                    solve_val = str(row.get(col, '-'))
-                    break
+        # สาเหตุเกิดจาก (ช่อง U / Index 20)
+        cause_val = str(row.iloc[20]) if len(row) > 20 and pd.notnull(row.iloc[20]) else str(row.get('สาเหตุเกิดจาก', '-'))
 
-        prob_val = str(row.get('ปัญหาที่พบ', '-'))
+        # การแก้ไขเบื้องต้น (รวมช่อง V และ AA / Index 21 และ 26)
+        v_val = str(row.iloc[21]) if len(row) > 21 and pd.notnull(row.iloc[21]) and str(row.iloc[21]) != 'nan' else ''
+        aa_val = str(row.iloc[26]) if len(row) > 26 and pd.notnull(row.iloc[26]) and str(row.iloc[26]) != 'nan' else ''
+        solve_val = " / ".join([x for x in [v_val, aa_val] if x])
+        if not solve_val: solve_val = '-'
+
         level_val = str(row.get('LEVEL', '-'))
-        cause_val = str(row.get('สาเหตุเกิดจาก', '-'))
         
         immediate_fix_val = '-'
         for col in dataframe.columns:
@@ -253,7 +253,7 @@ def generate_pdf_table(dataframe):
         result_val = str(row.get('ผลการแก้ไข', '-'))
         impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-        row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, prob_val, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
+        row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
 
         max_lines = 1
         for i, text in enumerate(row_data):
@@ -291,7 +291,7 @@ def generate_pdf_table(dataframe):
 
         x_start = pdf.get_x()
         y_start = pdf.get_y()
-        alignments = ['C', 'C', 'L', 'C', 'L', 'L', 'C', 'L', 'L', 'L', 'L', 'L']
+        alignments = ['C', 'C', 'L', 'C', 'L', 'C', 'L', 'L', 'L', 'L', 'L']
 
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
@@ -355,14 +355,13 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ (เปรียบเทียบซ้อนปีงบประมาณ) และตารางรายละเอียดประกอบการทบทวน ---
+# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ และตารางรายละเอียดประกอบการทบทวน ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', '3.ช่วงเวรที่เกิดความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL', 'สาเหตุเกิดจาก', 'การแก้ไขปัญหาเฉพาะหน้า', 'ผลการแก้ไข', 'ผลกระทบต่อคนไข้']
-additional_cols = [c for c in df.columns if any(k in str(c) for k in ['แก้ไข', 'เบื้องต้น', 'จัดการ', 'ปัญหา'])]
-for c in additional_cols:
+melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', '3.ช่วงเวรที่เกิดความเสี่ยง', 'LEVEL', 'ผลการแก้ไข', 'ผลกระทบต่อคนไข้']
+for c in df.columns:
     if c not in melt_id_vars:
         melt_id_vars.append(c)
 
@@ -381,7 +380,6 @@ if not melted_all.empty:
     if selected_risk_item:
         risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
-        # จัดเรียงลำดับเดือนตามปีงบประมาณ (ต.ค. เป็นเดือนแรก = 1 ถึง ก.ย. = 12)
         def get_budget_month_order(date):
             if pd.isnull(date): return 0
             m = date.month
@@ -396,10 +394,8 @@ if not melted_all.empty:
         }
         risk_subset['Month_Label'] = risk_subset['Budget_Month_Index'].map(thai_budget_months)
         
-        # จัดกลุ่มนับข้อมูลตาม ปีงบประมาณ และ เดือนตามปีงบประมาณ
         actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Budget_Month_Index', 'Month_Label']).size().reset_index(name='Count')
         
-        # สร้างโครงสร้างกริดให้ครบทุกเดือน (1-12) สำหรับทุกปีงบประมาณที่มีในข้อมูล
         budget_years_in_subset = sorted(risk_subset['Thai_Budget_Year'].dropna().unique())
         full_grid = []
         for b_year in budget_years_in_subset:
@@ -417,7 +413,6 @@ if not melted_all.empty:
         
         st.markdown(f"**กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ: `{selected_risk_item}`**")
         
-        # พล็อตเส้นกราฟซ้อนกันแยกสีตามปีงบประมาณ
         fig_line = px.line(
             merged_trend, 
             x='Month_Label', 
@@ -438,37 +433,49 @@ if not melted_all.empty:
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         
-        # ทำการ Sort เรียงตามวันที่เกิด จากใหม่ไปเก่า (ถ้าต้องการจากเก่าไปใหม่ ให้เปลี่ยน ascending=True)
         if 'Date' in detail_view_df.columns:
             detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
         
-        display_cols_mapping = {
-            'Date': 'วันที่เกิด',
-            '4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน',
-            '3.ช่วงเวรที่เกิดความเสี่ยง': 'ช่วงเวร',
-            'ปัญหาที่พบ': 'ปัญหาที่พบ',
-            'สาเหตุเกิดจาก': 'สาเหตุเกิดจาก',
-            'การแก้ไขปัญหาเบื้องต้น': 'การแก้ไขเบื้องต้น / การแก้ปัญหาเบื้องต้น',
-            'การแก้ไขปัญหาเฉพาะหน้า': 'การแก้ไขปัญหาเฉพาะหน้า',
-            'ผลการแก้ไข': 'ผลการแก้ไข',
-            'ผลกระทบต่อคนไข้': 'ผลกระทบกับคนไข้'
-        }
-        
-        present_cols = {}
-        for col_key, col_label in display_cols_mapping.items():
-            if col_key in detail_view_df.columns:
-                present_cols[col_key] = col_label
-            else:
-                for c in detail_view_df.columns:
-                    if col_key in str(c):
-                        present_cols[c] = col_label
-                        break
-                        
-        if present_cols:
-            sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
-            if 'วันที่เกิด' in sub_df_display.columns:
-                sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
+        # จัดเตรียมข้อมูลสำหรับแสดงในตาราง (ดึงคอลัมน์ U เป็นสาเหตุ, V & AA เป็นการแก้ไขเบื้องต้น, และตัดปัญหาที่พบออก)
+        table_rows = []
+        for _, r in detail_view_df.iterrows():
+            d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
+            u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+            shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
             
+            # ช่อง U (Index 20) สำหรับ สาเหตุเกิดจาก
+            cause_text = str(r.iloc[20]) if len(r) > 20 and pd.notnull(r.iloc[20]) and str(r.iloc[20]) != 'nan' else '-'
+            
+            # ช่อง V & AA (Index 21 และ 26) สำหรับ การแก้ไขเบื้องต้น
+            v_text = str(r.iloc[21]) if len(r) > 21 and pd.notnull(r.iloc[21]) and str(r.iloc[21]) != 'nan' else ''
+            aa_text = str(r.iloc[26]) if len(r) > 26 and pd.notnull(r.iloc[26]) and str(r.iloc[26]) != 'nan' else ''
+            solve_text = " / ".join([x for x in [v_text, aa_text] if x])
+            if not solve_text: solve_text = '-'
+            
+            # การแก้ไขปัญหาเฉพาะหน้า
+            imm_fix = '-'
+            for col in detail_view_df.columns:
+                if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
+                    imm_fix = str(r.get(col, '-'))
+                    break
+            
+            res_val = str(r.get('ผลการแก้ไข', '-'))
+            imp_val = str(r.get('ผลกระทบต่อคนไข้', '-'))
+            
+            table_rows.append({
+                'วันที่เกิด': d_str,
+                'หน่วยงาน': u_name,
+                'ช่วงเวร': shift,
+                'สาเหตุเกิดจาก': cause_text,
+                'การแก้ไขเบื้องต้น / การแก้ปัญหาเบื้องต้น': solve_text,
+                'การแก้ไขปัญหาเฉพาะหน้า': imm_fix,
+                'ผลการแก้ไข': res_val,
+                'ผลกระทบกับคนไข้': imp_val
+            })
+            
+        sub_df_display = pd.DataFrame(table_rows)
+        
+        if not sub_df_display.empty:
             html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
             custom_css = """
             <style>
@@ -502,7 +509,7 @@ if not melted_all.empty:
             """
             st.markdown(f'<div class="table-container">{custom_css}{html_table}</div>', unsafe_allow_html=True)
         else:
-            st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
+            st.info("ไม่พบข้อมูลรายละเอียดสำหรับรายการนี้")
 
 # --- 4. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
