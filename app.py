@@ -233,10 +233,10 @@ def generate_pdf_table(dataframe):
                 risk_desc = str(row[col])
                 break
 
-        # สาเหตุเกิดจาก (ช่อง U / Index 20)
-        cause_val = str(row.iloc[20]) if len(row) > 20 and pd.notnull(row.iloc[20]) else str(row.get('สาเหตุเกิดจาก', '-'))
+        # สาเหตุเกิดจาก (ดึงจากคอลัมน์ U หรือ Index 20)
+        cause_val = str(row.iloc[20]) if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan' else '-'
 
-        # การแก้ไขเบื้องต้น (รวมช่อง V และ AA / Index 21 และ 26)
+        # การแก้ไขเบื้องต้น (ดึงจากคอลัมน์ V และ AA หรือ Index 21 และ 26)
         v_val = str(row.iloc[21]) if len(row) > 21 and pd.notnull(row.iloc[21]) and str(row.iloc[21]) != 'nan' else ''
         aa_val = str(row.iloc[26]) if len(row) > 26 and pd.notnull(row.iloc[26]) and str(row.iloc[26]) != 'nan' else ''
         solve_val = " / ".join([x for x in [v_val, aa_val] if x])
@@ -436,10 +436,10 @@ if not melted_all.empty:
             u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
             shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
             
-            # ช่อง U (Index 20) สำหรับ สาเหตุเกิดจาก
+            # ดึงสาเหตุเกิดจาก (คอลัมน์ U / Index 20)
             cause_text = str(r.iloc[20]) if len(r) > 20 and pd.notnull(r.iloc[20]) and str(r.iloc[20]) != 'nan' else '-'
             
-            # ช่อง V & AA (Index 21 และ 26) สำหรับ การแก้ไขเบื้องต้น
+            # ดึงการแก้ไขเบื้องต้น / การแก้ปัญหาเบื้องต้น (รวมคอลัมน์ V และ AA / Index 21 และ 26)
             v_text = str(r.iloc[21]) if len(r) > 21 and pd.notnull(r.iloc[21]) and str(r.iloc[21]) != 'nan' else ''
             aa_text = str(r.iloc[26]) if len(r) > 26 and pd.notnull(r.iloc[26]) and str(r.iloc[26]) != 'nan' else ''
             solve_text = " / ".join([x for x in [v_text, aa_text] if x])
