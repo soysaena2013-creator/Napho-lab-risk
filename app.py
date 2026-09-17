@@ -366,7 +366,6 @@ if not melted_all.empty:
             if 'วันที่เกิด' in sub_df_display.columns:
                 sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
             
-            # แปลงเป็นตาราง HTML ที่กำหนดให้เต็มพื้นที่และตัดคำขึ้นบรรทัดใหม่ได้
             html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
             custom_css = """
             <style>
@@ -449,7 +448,7 @@ if not melted_all.empty:
 
 # --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง (สีส้ม / สีแดง ตามช่วงเวลาที่เลือก) & จัดเก็บเอกสารคุณภาพ PDF ---
 st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงระดับสูง (สีส้ม/สีแดง) ค้นหาสาเหตุ (ก้างปลา) และจัดทำเอกสารคุณภาพ PDF")
+st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงระดับสูง (สีส้ม/สีแดง) ค้นหาสาเหตุ (ก้างปลา 5M1E) และจัดทำเอกสารคุณภาพ PDF")
 
 if not melted_all.empty:
     high_risk_df = matrix_df[matrix_df['Risk_Level'].isin(['สูง (สีส้ม)', 'สูงมาก (สีแดง)'])]
@@ -464,18 +463,19 @@ if not melted_all.empty:
 
             col_rev1, col_rev2 = st.columns(2)
             with col_rev1:
-                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา)")
+                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)")
                 fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
                 fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
-                fish_material = st.text_area("🧪 วัสดุ/สิ่งแวดล้อม (Material/Milieu):", "คุณภาพสิ่งส่งตรวจ / สิ่งแวดล้อมหน้างานมีความแออัด")
+                fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด")
             
             with col_rev2:
-                st.markdown("##### 🛡️ 2. แนวทางแก้ไขและป้องกัน (CAPA)")
-                fish_method = st.text_area("📋 กระบวนการ (Process):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
+                st.markdown("##### 🛡️ 2. แนวทางกระบวนการและสิ่งแวดล้อม (Method & Environment)")
+                fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
+                fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน")
                 corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
                 preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-            def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, corr_act, prev_act):
+            def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act):
                 pdf = FPDF(orientation='P', unit='mm', format='A4')
                 pdf.set_auto_page_break(auto=True, margin=15)
                 pdf.add_page()
@@ -498,9 +498,9 @@ if not melted_all.empty:
                 pdf.ln(3)
 
                 pdf.set_fill_color(230, 240, 250)
-                pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา)", ln=True, fill=True)
+                pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
                 pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สิ่งแวดล้อม: {material}\n- กระบวนการ (Process): {method}")
+                pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
                 pdf.ln(3)
 
                 pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
@@ -517,7 +517,7 @@ if not melted_all.empty:
                 try:
                     pdf_file_path = generate_capa_pdf(
                         selected_high_risk, current_row['Risk_Level'], 
-                        fish_man, fish_machine, fish_material, fish_method, 
+                        fish_man, fish_machine, fish_material, fish_method, fish_env,
                         corrective_action, preventive_action
                     )
                     with open(pdf_file_path, "rb") as f:
