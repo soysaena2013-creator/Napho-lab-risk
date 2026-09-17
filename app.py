@@ -428,17 +428,19 @@ if not melted_all.empty:
             labels={'Month_Label': 'เดือน (ปีงบประมาณ)', 'Count': 'จำนวนครั้ง', 'Year_Label_Str': 'ปีงบประมาณ'}
         )
         fig_line.update_traces(textposition="top center", textfont=dict(size=11))
-        
-        # แก้ไขจุดที่ซ้ำซ้อนเรียบร้อยแล้ว
         fig_line.update_layout(
             font=dict(family="Tahoma, Sarabun, sans-serif", size=14), 
             xaxis=dict(type='category', categoryorder='array', categoryarray=list(thai_budget_months.values()))
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
+        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก (เรียงตามวันที่เกิด: ใหม่ไปเก่า)
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
+        
+        # ทำการ Sort เรียงตามวันที่เกิด จากใหม่ไปเก่า (ถ้าต้องการจากเก่าไปใหม่ ให้เปลี่ยน ascending=True)
+        if 'Date' in detail_view_df.columns:
+            detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
         
         display_cols_mapping = {
             'Date': 'วันที่เกิด',
