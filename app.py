@@ -430,7 +430,7 @@ if not melted_all.empty:
         fig_line.update_traces(textposition="top center", textfont=dict(size=11))
         fig_line.update_layout(
             font=dict(family="Tahoma, Sarabun, sans-serif", size=14), 
-            xaxis=dict(type='category', categoryorder='array', categoryorder_array=list(thai_budget_months.values()))
+            xaxis=dict(type='category', categoryorder='array', categoryorder=list(thai_budget_months.values()))
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
