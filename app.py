@@ -287,12 +287,17 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ ---
+# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ และตารางรายละเอียดประกอบการทบทวน ---
 st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL']
+melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', '3.ช่วงเวรที่เกิดความเสี่ยง', 'ปัญหาที่พบ', 'LEVEL', 'สาเหตุเกิดจาก', 'การแก้ไขปัญหาเฉพาะหน้า', 'ผลการแก้ไข', 'ผลกระทบต่อคนไข้']
+additional_cols = [c for c in df.columns if any(k in str(c) for k in ['แก้ไข', 'เบื้องต้น', 'จัดการ', 'ปัญหา'])]
+for c in additional_cols:
+    if c not in melt_id_vars:
+        melt_id_vars.append(c)
+
 melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
 
 if not df_f.empty and risk_cols:
@@ -330,7 +335,41 @@ if not melted_all.empty:
         fig_line.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(type='category', tickangle=-30))
         st.plotly_chart(fig_line, use_container_width=True)
 
-# --- 4. ตารางและแผนภูมิ Risk Matrix (นำกลับมาแสดงผลครบถ้วนตามต้นฉบับ) ---
+        # เพิ่มตารางแสดงรายละเอียดอุบัติการณ์ประกอบการทบทวนรายรายการ
+        st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
+        detail_view_df = risk_subset.copy()
+        
+        display_cols_mapping = {
+            'Date': 'วันที่เกิด',
+            '4.หน่วยงานที่ทำให้เกิดความเสี่ยง': 'หน่วยงาน',
+            '3.ช่วงเวรที่เกิดความเสี่ยง': 'ช่วงเวร',
+            'ปัญหาที่พบ': 'ปัญหาที่พบ',
+            'สาเหตุเกิดจาก': 'สาเหตุเกิดจาก',
+            'การแก้ไขปัญหาเบื้องต้น': 'การแก้ไขเบื้องต้น / การแก้ปัญหาเบื้องต้น',
+            'การแก้ไขปัญหาเฉพาะหน้า': 'การแก้ไขปัญหาเฉพาะหน้า',
+            'ผลการแก้ไข': 'ผลการแก้ไข',
+            'ผลกระทบต่อคนไข้': 'ผลกระทบกับคนไข้'
+        }
+        
+        present_cols = {}
+        for col_key, col_label in display_cols_mapping.items():
+            if col_key in detail_view_df.columns:
+                present_cols[col_key] = col_label
+            else:
+                for c in detail_view_df.columns:
+                    if col_key in str(c):
+                        present_cols[c] = col_label
+                        break
+                        
+        if present_cols:
+            sub_df_display = detail_view_df[list(present_cols.keys())].rename(columns=present_cols)
+            if 'วันที่เกิด' in sub_df_display.columns:
+                sub_df_display['วันที่เกิด'] = pd.to_datetime(sub_df_display['วันที่เกิด']).dt.strftime('%Y-%m-%d')
+            st.dataframe(sub_df_display, use_container_width=True)
+        else:
+            st.info("ไม่พบคอลัมน์รายละเอียดเพิ่มเติมสำหรับรายการนี้")
+
+# --- 4. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
 st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
@@ -403,7 +442,6 @@ if not melted_all.empty:
                 corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
                 preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-            # ฟังก์ชันสร้างไฟล์ PDF สำหรับเก็บเป็นเอกสารคุณภาพ
             def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, corr_act, prev_act):
                 pdf = FPDF(orientation='P', unit='mm', format='A4')
                 pdf.set_auto_page_break(auto=True, margin=15)
