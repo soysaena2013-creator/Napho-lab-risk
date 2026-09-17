@@ -360,15 +360,9 @@ st.markdown("---")
 st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
 
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-melt_id_vars = ['Date', 'Thai_Budget_Year', '4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '5.ประเภทความเสี่ยง', '3.ช่วงเวรที่เกิดความเสี่ยง', 'LEVEL', 'ผลการแก้ไข', 'ผลกระทบต่อคนไข้']
-for c in df.columns:
-    if c not in melt_id_vars:
-        melt_id_vars.append(c)
-
-melt_id_vars = [c for c in melt_id_vars if c in df_f.columns]
 
 if not df_f.empty and risk_cols:
-    melted_all = df_f.melt(id_vars=melt_id_vars, value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+    melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
     melted_all = melted_all[melted_all['Risk_Detail'] != '']
 else:
     melted_all = pd.DataFrame()
@@ -436,7 +430,6 @@ if not melted_all.empty:
         if 'Date' in detail_view_df.columns:
             detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
         
-        # จัดเตรียมข้อมูลสำหรับแสดงในตาราง (ดึงคอลัมน์ U เป็นสาเหตุ, V & AA เป็นการแก้ไขเบื้องต้น, และตัดปัญหาที่พบออก)
         table_rows = []
         for _, r in detail_view_df.iterrows():
             d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
@@ -452,7 +445,6 @@ if not melted_all.empty:
             solve_text = " / ".join([x for x in [v_text, aa_text] if x])
             if not solve_text: solve_text = '-'
             
-            # การแก้ไขปัญหาเฉพาะหน้า
             imm_fix = '-'
             for col in detail_view_df.columns:
                 if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
