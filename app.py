@@ -4,6 +4,7 @@ import plotly.express as px
 import numpy as np
 import io
 import requests
+import matplotlib.pyplot as plt
 from fpdf import FPDF
 import tempfile
 import os
@@ -111,7 +112,6 @@ def extract_cause_values(row, columns_list):
             if val and val != 'nan':
                 cause_text = val
                 break
-    # Fallback กรณีไม่พบชื่อคอลัมน์ ให้ใช้ index 20 หรือค้นหาคอลัมน์ใกล้เคียง
     if not cause_text or cause_text == 'nan':
         if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan':
             cause_text = str(row.iloc[20])
@@ -170,6 +170,10 @@ if len(st.session_state['saved_capa_reports']) > 0:
                 pdf.cell(0, 7, txt=f"รายการความเสี่ยง: {r['risk_name']}", ln=True)
                 pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {r['risk_lvl']}", ln=True)
                 pdf.ln(3)
+
+                if 'fig_path' in r and r['fig_path'] and os.path.exists(r['fig_path']):
+                    pdf.image(r['fig_path'], x=15, w=180)
+                    pdf.ln(3)
 
                 pdf.set_fill_color(230, 240, 250)
                 pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
@@ -272,12 +276,8 @@ def generate_pdf_table(dataframe):
                 risk_desc = str(row[col])
                 break
 
-        # ใช้ฟังก์ชันดึงค่าสาเหตุเกิดจาก (U)
         cause_val = extract_cause_values(row, dataframe.columns)
-
-        # ใช้ฟังก์ชันดึงค่า V & AA
         solve_val = extract_v_aa_values(row, dataframe.columns)
-
         level_val = str(row.get('LEVEL', '-'))
         
         immediate_fix_val = '-'
@@ -391,17 +391,62 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# --- 3. กราฟเส้นแนวโน้มรายเดือนตลอดปีงบประมาณ และตารางรายละเอียดประกอบการทบทวน ---
-st.markdown("---")
-st.subheader("📈 วิเคราะห์และทบทวนความเสี่ยงรายรายการ (Trend & Review)")
-
+#เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
     melted_all = melted_all[melted_all['Risk_Detail'] != '']
 else:
     melted_all = pd.DataFrame()
+
+# --- 3. ตารางและแผนภูมิ Risk Matrix ---
+st.markdown("---")
+st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+
+if not melted_all.empty:
+    matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
+    
+    def get_sev_from_row(risk_name):
+        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
+        if not sev_col: return 'A'
+        matches = df_f[df_f.isin([risk_name]).any(axis=1)]
+        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
+
+    matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
+    matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
+    matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
+    matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
+    matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
+
+    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+    display_df = matrix_df.copy()
+    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
+
+    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']].rename(columns={
+        'Risk_Detail': 'รายการความเสี่ยงย่อย',
+        'Frequency': 'ความถี่',
+        'Freq_Score': 'คะแนนความถี่',
+        'Sev_Score': 'คะแนนความรุนแรง',
+        'Risk_Matrix': 'คะแนนรวม Matrix'
+    }), use_container_width=True)
+
+    st.subheader("🗺️ แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+
+    fig_matrix = px.scatter(
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5],
+        labels={'x_jitter': 'คะแนนความถี่ (Frequency Score)', 'y_jitter': 'คะแนนความรุนแรง (Severity Score)'}
+    )
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+# --- 4. ฟังก์ชันทบทวนความเสี่ยง (ย้ายส่วน Trend & Review มาไว้รวมกันที่นี่ตามคำขอ) ---
+st.markdown("---")
+st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและวิเคราะห์เชิงลึก (Trend, 5M1E & CAPA Report)")
 
 if not melted_all.empty:
     unique_risks = sorted(melted_all['Risk_Detail'].unique())
@@ -459,10 +504,9 @@ if not melted_all.empty:
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก (เรียงตามวันที่เกิด: ใหม่ไปเก่า)
+        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
-        
         if 'Date' in detail_view_df.columns:
             detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
         
@@ -471,11 +515,7 @@ if not melted_all.empty:
             d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
             u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
             shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
-            
-            # ใช้ฟังก์ชันดึงค่าสาเหตุเกิดจาก (U)
             cause_text = extract_cause_values(r, detail_view_df.columns)
-            
-            # ใช้ฟังก์ชันดึงค่า V & AA
             solve_text = extract_v_aa_values(r, detail_view_df.columns)
             
             imm_fix = '-'
@@ -499,191 +539,130 @@ if not melted_all.empty:
             })
             
         sub_df_display = pd.DataFrame(table_rows)
-        
         if not sub_df_display.empty:
             html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
             custom_css = """
             <style>
-            .table-custom {
-                width: 100% !important;
-                border-collapse: collapse;
-                font-family: 'Sarabun', 'Tahoma', sans-serif;
-                font-size: 14px;
-            }
-            .table-custom th, .table-custom td {
-                border: 1px solid #ddd;
-                padding: 8px 12px;
-                text-align: left;
-                word-break: break-word;
-                white-space: normal;
-            }
-            .table-custom th {
-                background-color: #f8f9fa;
-                font-weight: bold;
-                text-align: center;
-            }
-            .table-container {
-                max-height: 400px;
-                overflow-y: auto;
-                overflow-x: auto;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                margin-bottom: 20px;
-            }
+            .table-custom { width: 100% !important; border-collapse: collapse; font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 14px; }
+            .table-custom th, .table-custom td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; word-break: break-word; white-space: normal; }
+            .table-custom th { background-color: #f8f9fa; font-weight: bold; text-align: center; }
+            .table-container { max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 20px; }
             </style>
             """
             st.markdown(f'<div class="table-container">{custom_css}{html_table}</div>', unsafe_allow_html=True)
-        else:
-            st.info("ไม่พบข้อมูลรายละเอียดสำหรับรายการนี้")
 
-# --- 4. ตารางและแผนภูมิ Risk Matrix ---
-st.markdown("---")
-st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
-
-if not melted_all.empty:
-    matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
-    
-    def get_sev_from_row(risk_name):
-        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
-        if not sev_col: return 'A'
-        matches = df_f[df_f.isin([risk_name]).any(axis=1)]
-        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
-
-    matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
-    matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
-    matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
-    matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
-    matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
-    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
-
-    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
-    display_df = matrix_df.copy()
-    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
-
-    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']].rename(columns={
-        'Risk_Detail': 'รายการความเสี่ยงย่อย',
-        'Frequency': 'ความถี่',
-        'Freq_Score': 'คะแนนความถี่',
-        'Sev_Score': 'คะแนนความรุนแรง',
-        'Risk_Matrix': 'คะแนนรวม Matrix'
-    }), use_container_width=True)
-
-    st.subheader("🗺️ แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
-    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
-    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
-
-    fig_matrix = px.scatter(
-        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
-        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
-        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5],
-        labels={'x_jitter': 'คะแนนความถี่ (Frequency Score)', 'y_jitter': 'คะแนนความรุนแรง (Severity Score)'}
-    )
-    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
-    st.plotly_chart(fig_matrix, use_container_width=True)
-
-# --- 5. ฟังก์ชันทบทวนความเสี่ยงเฉพาะระดับสูง & บันทึกเก็บประวัติลง Sidebar ---
-st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงระดับสูง (สีส้ม/สีแดง) ค้นหาสาเหตุ (ก้างปลา 5M1E) และจัดทำเอกสารคุณภาพ PDF")
-
-if not melted_all.empty:
-    high_risk_df = matrix_df[matrix_df['Risk_Level'].isin(['สูง (สีส้ม)', 'สูงมาก (สีแดง)'])]
-
-    if not high_risk_df.empty:
-        high_risk_options = high_risk_df['Risk_Detail'].tolist()
-        selected_high_risk = st.selectbox("🚨 เลือกความเสี่ยงระดับสูง (สีส้ม/สีแดง) จากช่วงเวลาที่เลือก เพื่อนำมาทบทวนเชิงลึก:", high_risk_options)
-
-        if selected_high_risk:
-            current_row = high_risk_df[high_risk_df['Risk_Detail'] == selected_high_risk].iloc[0]
-            st.info(f"📌 **ความเสี่ยงที่เลือก:** {selected_high_risk} | **ระดับความเสี่ยง:** {current_row['Risk_Level']} (คะแนน Matrix: {current_row['Risk_Matrix']})")
-
-            col_rev1, col_rev2 = st.columns(2)
-            with col_rev1:
-                st.markdown("##### 🔍 1. วิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)")
-                fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="input_man")
-                fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="input_machine")
-                fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="input_material")
-                fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="input_method")
-                fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="input_env")
+        st.markdown("---")
+        st.markdown("##### 🔍 วิเคราะห์สาเหตุ (ก้างปลา 5M1E) และจัดทำมาตรการ CAPA")
+        
+        col_rev1, col_rev2 = st.columns(2)
+        with col_rev1:
+            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="input_man")
+            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="input_machine")
+            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="input_material")
+        with col_rev2:
+            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="input_method")
+            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="input_env")
             
-            with col_rev2:
-                st.markdown("##### 🛡️ 2. มาตรการแก้ไขและป้องกัน (CAPA)")
-                corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="input_corr")
-                preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="input_prev")
+        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="input_corr")
+        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="input_prev")
 
-            def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act):
-                pdf = FPDF(orientation='P', unit='mm', format='A4')
-                pdf.set_auto_page_break(auto=True, margin=15)
-                pdf.add_page()
-                
-                font_path = "Sarabun-Regular.ttf"
-                if os.path.exists(font_path):
-                    pdf.add_font("Sarabun", "", font_path)
-                    pdf.set_font("Sarabun", size=14)
-                else:
-                    pdf.set_font("Arial", size=14)
+        # ค้นหาคะแนนความเสี่ยงของรายการนี้จาก matrix_df ถ้ามี
+        current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
+        risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
+        risk_mat_score = current_risk_row['Risk_Matrix'].iloc[0] if not current_risk_row.empty else 4
 
-                pdf.cell(0, 8, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.cell(0, 6, txt="ระบบบริหารจัดการความเสี่ยงมาตรฐานห้องปฏิบัติการ (ISO 15189)", ln=True, align='C')
-                pdf.ln(5)
+        def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, fig_path=None):
+            pdf = FPDF(orientation='P', unit='mm', format='A4')
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+            
+            font_path = "Sarabun-Regular.ttf"
+            if os.path.exists(font_path):
+                pdf.add_font("Sarabun", "", font_path)
+                pdf.set_font("Sarabun", size=14)
+            else:
+                pdf.set_font("Arial", size=14)
 
-                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
-                pdf.cell(0, 7, txt=f"รายการความเสี่ยง: {risk_name}", ln=True)
-                pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {risk_lvl}", ln=True)
+            pdf.cell(0, 8, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.cell(0, 6, txt="ระบบบริหารจัดการความเสี่ยงมาตรฐานห้องปฏิบัติการ (ISO 15189)", ln=True, align='C')
+            pdf.ln(5)
+
+            pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+            pdf.cell(0, 7, txt=f"รายการความเสี่ยง: {risk_name}", ln=True)
+            pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {risk_lvl}", ln=True)
+            pdf.ln(3)
+
+            # แทรกรูปกราฟแนวโน้มใน PDF
+            if fig_path and os.path.exists(fig_path):
+                pdf.image(fig_path, x=15, w=180)
                 pdf.ln(3)
 
-                pdf.set_fill_color(230, 240, 250)
-                pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
-                pdf.ln(3)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
+            pdf.ln(3)
 
-                pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
-                pdf.set_fill_color(230, 240, 250)
-                pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-                pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-                pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
+            pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
+            
+            tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            pdf.output(tmp_pdf.name)
+            return tmp_pdf.name
+
+        if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) พร้อมกราฟแนวโน้ม"):
+            try:
+                # สร้างรูปกราฟด้วย Matplotlib สำหรับใส่ใน PDF
+                plt.figure(figsize=(8, 3.5), dpi=300)
+                plt.plot(list(thai_budget_months.values()), merged_trend['Count'], marker='o', color='#1f77b4', linewidth=2, markersize=6)
+                plt.title(f"Trend Analysis: {selected_risk_item}", fontsize=11)
+                plt.xlabel("Month (Fiscal Year)", fontsize=9)
+                plt.ylabel("Incidents Count", fontsize=9)
+                plt.grid(True, linestyle='--', alpha=0.6)
+                for i, txt in enumerate(merged_trend['Count']):
+                    if txt > 0:
+                        plt.annotate(str(int(txt)), (list(thai_budget_months.values())[i], txt), textcoords="offset points", xytext=(0,8), ha='center', fontsize=8)
+                plt.tight_layout()
                 
-                tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-                pdf.output(tmp_pdf.name)
-                return tmp_pdf.name
+                tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                plt.savefig(tmp_img.name, format='png', dpi=300)
+                plt.close()
+                fig_img_path = tmp_img.name
 
-            if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) สำหรับเก็บเข้าระบบ"):
-                try:
-                    report_data = {
-                        'risk_name': selected_high_risk,
-                        'risk_lvl': current_row['Risk_Level'],
-                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'man': fish_man,
-                        'machine': fish_machine,
-                        'material': fish_material,
-                        'method': fish_method,
-                        'env': fish_env,
-                        'corr_act': corrective_action,
-                        'prev_act': preventive_action
-                    }
-                    st.session_state['saved_capa_reports'].append(report_data)
+                report_data = {
+                    'risk_name': selected_risk_item,
+                    'risk_lvl': risk_lvl_val,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'man': fish_man,
+                    'machine': fish_machine,
+                    'material': fish_material,
+                    'method': fish_method,
+                    'env': fish_env,
+                    'corr_act': corrective_action,
+                    'prev_act': preventive_action,
+                    'fig_path': fig_img_path
+                }
+                st.session_state['saved_capa_reports'].append(report_data)
 
-                    pdf_file_path = generate_capa_pdf(
-                        selected_high_risk, current_row['Risk_Level'], 
-                        fish_man, fish_machine, fish_material, fish_method, fish_env,
-                        corrective_action, preventive_action
+                pdf_file_path = generate_capa_pdf(
+                    selected_risk_item, risk_lvl_val, 
+                    fish_man, fish_machine, fish_material, fish_method, fish_env,
+                    corrective_action, preventive_action, fig_img_path
+                )
+                
+                with open(pdf_file_path, "rb") as f:
+                    st.download_button(
+                        label="📥 คลิกดาวน์โหลดเอกสาร PDF บันทึกความเสี่ยงนี้",
+                        data=f,
+                        file_name=f"CAPA_Report_{selected_risk_item[:15]}.pdf",
+                        mime="application/pdf"
                     )
-                    
-                    with open(pdf_file_path, "rb") as f:
-                        st.download_button(
-                            label="📥 คลิกดาวน์โหลดเอกสาร PDF บันทึกความเสี่ยงนี้",
-                            data=f,
-                            file_name=f"CAPA_Report_{current_row['Risk_Matrix']}.pdf",
-                            mime="application/pdf"
-                        )
-                    st.success("บันทึกข้อมูลเข้าสู่ระบบเรียบร้อยแล้ว! (คุณสามารถเรียกดูย้อนหลังได้จากเมนูด้านซ้าย Sidebar)")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
-        else:
-            st.success("✨ ในช่วงเวลาและเงื่อนไขตัวกรองที่เลือก ไม่พบความเสี่ยงระดับสูง (สีส้มหรือสีแดง) ทุกอย่างอยู่ในเกณฑ์มาตรฐานที่ควบคุมได้ครับ!")
-    else:
-        st.info("✨ ไม่มีรายการความเสี่ยงระดับสูงในช่วงเวลาที่เลือก")
+                st.success("บันทึกข้อมูลและสร้างรายงาน PDF สำเร็จเรียบร้อยแล้ว! (สามารถเปิดดูประวัติย้อนหลังได้จากเมนูด้านซ้าย Sidebar)")
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
     st.info("โปรดตรวจสอบข้อมูลในระบบ หรือเลือกเงื่อนไขตัวกรองใหม่อีกครั้ง")
