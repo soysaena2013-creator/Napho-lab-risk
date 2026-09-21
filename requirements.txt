@@ -2,4 +2,6 @@ streamlit
 pandas
 plotly
 numpy
-fpdf2
+requests
+matplotlib
+fpdf
