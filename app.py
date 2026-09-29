@@ -51,7 +51,7 @@ if 'master_reviewers' not in st.session_state:
         {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
         {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
         {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
         {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
     ]
 
@@ -582,11 +582,15 @@ if not melted_all.empty:
             with col_chk:
                 is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
             with col_up:
-                sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
-                if sig_upload is not None:
-                    tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                    tmp_s.write(sig_upload.read())
-                    st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+                # ถ้าเป็นผู้อำนวยการ (ผู้อนุมัติ) จะซ่อนช่องอัปโหลดลายเซ็น เพราะต้องเว้นว่างไว้
+                if "ผู้อำนวยการ" not in rev['position'] and "ผู้อนุมัติ" not in rev['role']:
+                    sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
+                    if sig_upload is not None:
+                        tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                        tmp_s.write(sig_upload.read())
+                        st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+                else:
+                    st.info("ตำแหน่งนี้จะเว้นช่องลายเซ็นไว้ตามเงื่อนไข")
 
             if is_selected:
                 selected_reviewers_for_report.append(st.session_state['master_reviewers'][idx])
@@ -606,7 +610,7 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงาน ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และเว้นช่องลายเซ็นผู้อำนวยการว่างไว้ ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -759,7 +763,10 @@ if not melted_all.empty:
                     pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
                     pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
-                    if rev['sig_path'] and os.path.exists(rev['sig_path']):
+                    # ตรวจสอบว่าเป็นผู้อำนวยการหรือไม่ หากใช่ ให้เว้นพื้นที่ว่างสำหรับเซ็นชื่อโดยไม่ใส่รูปภาพลายเซ็น
+                    is_director = ("ผู้อำนวยการ" in rev['position'] or "ผู้อนุมัติ" in rev['role'])
+                    
+                    if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
                             pdf.image(rev['sig_path'], x=20, y=pdf.get_y(), h=12)
                         except:
