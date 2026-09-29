@@ -40,7 +40,7 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง และรายชื่อคณะทำงานกลาง ---
+# --- กำหนด Session State สำหรับเก็บประวัติ และสถานะไฟล์ PDF ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
@@ -55,7 +55,13 @@ if 'master_reviewers' not in st.session_state:
         {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
     ]
 
-# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
+if 'full_pdf_path' not in st.session_state:
+    st.session_state['full_pdf_path'] = None
+
+if 'capa_pdf_path' not in st.session_state:
+    st.session_state['capa_pdf_path'] = None
+
+# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -83,6 +89,8 @@ st.sidebar.header("เครื่องมือสืบค้น")
 
 if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
     st.cache_data.clear()
+    st.session_state['full_pdf_path'] = None
+    st.session_state['capa_pdf_path'] = None
     st.rerun()
 
 if not df.empty:
@@ -113,7 +121,7 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
-# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุเกิดจาก (U) และ V&AA ---
+# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุ (U) และ V&AA ---
 def extract_cause_values(row, columns_list):
     cause_text = ""
     for col in columns_list:
@@ -163,7 +171,7 @@ else:
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# --- ส่วนแสดง Metric สรุปภาพรวมเดิม ---
+# --- ส่วนแสดง Metric สรุปภาพรวม ---
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -308,15 +316,26 @@ def generate_pdf_table(dataframe):
     pdf.output(tmp_file.name)
     return tmp_file.name
 
+# --- Sidebar: ปุ่มสร้างและดาวน์โหลดรายงานภาพรวม ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงานภาพรวม")
-if st.sidebar.button("📥 ดาวน์โหลดรายงานตาราง PDF (ข้อมูลครบถ้วน)"):
+if st.sidebar.button("⚙️ ประมวลผลสร้างรายงานตาราง PDF"):
     try:
         pdf_path = generate_pdf_table(df_f)
-        with open(pdf_path, "rb") as f:
-            st.sidebar.download_button("คลิกเพื่อบันทึกไฟล์ PDF", f, file_name="Risk_Full_Report.pdf", mime="application/pdf")
+        st.session_state['full_pdf_path'] = pdf_path
+        st.sidebar.success("สร้างไฟล์ PDF สำเร็จแล้ว!")
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
+
+if st.session_state['full_pdf_path'] and os.path.exists(st.session_state['full_pdf_path']):
+    with open(st.session_state['full_pdf_path'], "rb") as f:
+        st.sidebar.download_button(
+            label="📥 คลิกดาวน์โหลดรายงานตาราง PDF",
+            data=f,
+            file_name="Risk_Full_Report.pdf",
+            mime="application/pdf",
+            key="dl_full_pdf"
+        )
 
 # --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
@@ -356,7 +375,7 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-#เตรียม melted_all สำหรับส่วนอื่นๆ
+# เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
@@ -512,7 +531,7 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (Master List) ---
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
         st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
@@ -536,7 +555,7 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงาน ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -626,7 +645,7 @@ if not melted_all.empty:
             pdf.output(tmp_pdf.name)
             return tmp_pdf.name
 
-        if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) พร้อมรายชื่อคณะทำงานที่เลือก"):
+        if st.button("💾 บันทึกและประมวลผลออกเอกสาร CAPA (PDF)"):
             try:
                 plt.figure(figsize=(8, 3.5), dpi=300)
                 plt.plot(list(thai_budget_months.values()), merged_trend['Count'], marker='o', color='#1f77b4', linewidth=2, markersize=6)
@@ -663,15 +682,20 @@ if not melted_all.empty:
                     corrective_action, preventive_action, selected_reviewers_for_report, fig_img_path
                 )
                 
-                with open(pdf_file_path, "rb") as f:
-                    st.download_button(
-                        label="📥 คลิกดาวน์โหลดเอกสาร PDF (รพ.นาโพธิ์)",
-                        data=f,
-                        file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
-                        mime="application/pdf"
-                    )
-                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อคณะทำงานมาลงนามให้อัตโนมัติเรียบร้อยครับ")
+                st.session_state['capa_pdf_path'] = pdf_file_path
+                st.success("สร้างรายงาน CAPA PDF สำเร็จ! สามารถคลิกดาวน์โหลดด้านล่างได้เลยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
+
+        # แสดงปุ่มดาวน์โหลดรายงาน CAPA อย่างต่อเนื่องผ่าน Session State
+        if st.session_state['capa_pdf_path'] and os.path.exists(st.session_state['capa_pdf_path']):
+            with open(st.session_state['capa_pdf_path'], "rb") as f:
+                st.download_button(
+                    label="📥 คลิกดาวน์โหลดเอกสาร CAPA PDF (รพ.นาโพธิ์)",
+                    data=f,
+                    file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
+                    mime="application/pdf",
+                    key="dl_capa_pdf"
+                )
 else:
     st.info("โปรดตรวจสอบข้อมูลในระบบ หรือเลือกเงื่อนไขตัวกรองใหม่อีกครั้ง")
