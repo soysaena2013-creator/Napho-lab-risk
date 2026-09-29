@@ -605,38 +605,38 @@ if not melted_all.empty:
 
         # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib (ใช้ฟอนต์ Sarabun)
         def generate_fishbone_diagram(man, machine, material, method, env):
-            plt.figure(figsize=(10, 5), dpi=300)
+            plt.figure(figsize=(10, 4.5), dpi=300)
             ax = plt.subplot(111)
             ax.set_xlim(0, 100)
-            ax.set_ylim(0, 60)
+            ax.set_ylim(0, 65)
             ax.axis('off')
 
             # แกนหลักกระดูกสันหลัง
-            plt.plot([10, 85], [30, 30], color='navy', lw=3)
+            plt.plot([10, 85], [32, 32], color='navy', lw=3)
             # หัวปลา
             head_x = [85, 95, 95, 85]
-            head_y = [20, 25, 35, 40]
+            head_y = [22, 27, 37, 42]
             plt.fill(head_x, head_y, color='#e6f0fa', edgecolor='navy', lw=2)
-            plt.text(90, 30, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy', fontname='Sarabun')
+            plt.text(90, 32, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy', fontname='Sarabun')
 
             # กิ่งก้านด้านบน (Man, Machine, Material)
-            plt.plot([25, 20], [30, 50], color='black', lw=1.5)
-            plt.text(19, 52, f"Man (บุคลากร):\n{str(man)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.plot([25, 20], [32, 54], color='black', lw=1.5)
+            plt.text(19, 56, f"Man (บุคลากร):\n{str(man)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            plt.plot([47, 42], [30, 50], color='black', lw=1.5)
-            plt.text(41, 52, f"Machine (เครื่องมือ):\n{str(machine)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.plot([47, 42], [32, 54], color='black', lw=1.5)
+            plt.text(41, 56, f"Machine (เครื่องมือ):\n{str(machine)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            plt.plot([69, 64], [30, 50], color='black', lw=1.5)
-            plt.text(63, 52, f"Material (วัสดุ/สารเคมี):\n{str(material)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.plot([69, 64], [32, 54], color='black', lw=1.5)
+            plt.text(63, 56, f"Material (วัสดุ/สารเคมี):\n{str(material)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
 
             # กิ่งก้านด้านล่าง (Method, Environment)
-            plt.plot([36, 31], [30, 10], color='black', lw=1.5)
-            plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:60]}...", fontsize=8, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.plot([36, 31], [32, 10], color='black', lw=1.5)
+            plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:50]}...", fontsize=7.5, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            plt.plot([58, 53], [30, 10], color='black', lw=1.5)
-            plt.text(52, 8, f"Environment (สิ่งแวดล้อม):\n{str(env)[:60]}...", fontsize=8, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.plot([58, 53], [32, 10], color='black', lw=1.5)
+            plt.text(52, 8, f"Environment (สิ่งแวดล้อม):\n{str(env)[:50]}...", fontsize=7.5, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
 
-            plt.title("Fishbone Diagram (5M1E Root Cause Analysis)", fontsize=11, fontweight='bold', pad=5, fontname='Sarabun')
+            plt.title("Fishbone Diagram (5M1E Root Cause Analysis)", fontsize=10, fontweight='bold', pad=2, fontname='Sarabun')
             
             tmp_fish = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
             plt.savefig(tmp_fish.name, bbox_inches='tight', dpi=300)
@@ -652,19 +652,28 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # 1. โลโก้โรงพยาบาลนาโพธิ์ที่หัวกระดาษ
-            logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
-            try:
-                logo_resp = requests.get(logo_url, timeout=3)
-                if logo_resp.status_code == 200 and b"html" not in logo_resp.content[:100].lower():
-                    tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                    tmp_logo.write(logo_resp.content)
-                    tmp_logo.close()
-                    pdf.image(tmp_logo.name, x=94, y=8, w=20)
+            # 1. ดึงไฟล์รูปโลโก้โรงพยาบาลที่ผู้ใช้แนบเข้ามาโดยตรง
+            logo_img_path = None
+            for uploaded_file in st.session_state.get('uploaded_files', []):
+                pass
+            # หากใช้ไฟล์ตัวอย่างภาพโลโก้
+            logo_local_fallback = "image_5816d7.png"
+            if os.path.exists(logo_local_fallback):
+                logo_img_path = logo_local_fallback
+            else:
+                # ลองค้นหาไฟล์โลโก้ในเครื่องหากมี
+                for f_name in os.listdir('.'):
+                    if 'image_' in f_name or 'logo' in f_name.lower():
+                        logo_img_path = f_name
+                        break
+
+            if logo_img_path and os.path.exists(logo_img_path):
+                try:
+                    pdf.image(logo_img_path, x=94, y=8, w=20)
                     pdf.ln(16)
-                else:
+                except:
                     pdf.ln(4)
-            except:
+            else:
                 pdf.ln(4)
 
             pdf.set_font(font_name, 'B', 13)
@@ -710,7 +719,7 @@ if not melted_all.empty:
             pdf.cell(0, 7, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
             pdf.ln(2)
 
-            # นำภาพแผนภูมิก้างปลา (ภาษาไทยปกติ) มาใส่
+            # นำภาพแผนภูมิก้างปลามาใส่
             if fish_path and os.path.exists(fish_path):
                 pdf.image(fish_path, x=15, w=180)
                 pdf.ln(2)
@@ -725,15 +734,16 @@ if not melted_all.empty:
             
             pdf.set_font(font_name, '', 9.5)
             pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
-            pdf.ln(4)
+            pdf.ln(6)
 
-            # ป้องกันหัวข้อหลักขาดตอนเมื่อขึ้นหน้าใหม่ (บังคับให้หัวข้อข้อ 3 ไปพร้อมกับพื้นที่เซ็นชื่ออย่างน้อย 40 มม.)
-            if pdf.get_y() > 240:
+            # ป้องกันหัวข้อหลักขาดตอนเมื่อขึ้นหน้าใหม่ (เว้นพื้นที่ไว้รองรับบล็อกลายเซ็น)
+            if pdf.get_y() > 210:
                 pdf.add_page()
+                pdf.ln(4)
 
             pdf.set_font(font_name, 'B', 10.5)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-            pdf.ln(2)
+            pdf.ln(4) # ขยับเว้นลงมาจากหัวข้อหลักเพิ่มขึ้น
 
             if len(reviewers) > 0:
                 normal_reviewers = [r for r in reviewers if "ผู้อำนวยการ" not in str(r['position']) and "ผู้อนุมัติ" not in str(r['role'])]
@@ -767,7 +777,7 @@ if not melted_all.empty:
 
                 i = 0
                 while i < len(normal_reviewers):
-                    if pdf.get_y() > 200:
+                    if pdf.get_y() > 215:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
@@ -775,19 +785,19 @@ if not melted_all.empty:
                     
                     if i + 1 < len(normal_reviewers):
                         draw_signature_block(normal_reviewers[i+1], 110, y_start)
-                        pdf.set_y(y_start + 35)
+                        pdf.set_y(y_start + 36)
                     else:
-                        pdf.set_y(y_start + 35)
+                        pdf.set_y(y_start + 36)
                     
                     i += 2
 
                 for rev in director_reviewers:
-                    if pdf.get_y() > 200:
+                    if pdf.get_y() > 215:
                         pdf.add_page()
                     
-                    y_start = pdf.get_y() + 2
+                    y_start = pdf.get_y() + 4
                     draw_signature_block(rev, 60, y_start)
-                    pdf.set_y(y_start + 35)
+                    pdf.set_y(y_start + 36)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
