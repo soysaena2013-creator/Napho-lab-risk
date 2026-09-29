@@ -11,6 +11,7 @@ import tempfile
 import os
 from datetime import datetime
 from PIL import Image as PILImage
+import base64
 
 # --- ตั้งค่าฟอนต์ภาษาไทยสำหรับ Matplotlib ---
 def setup_matplotlib_font():
@@ -247,7 +248,7 @@ if not df_f.empty:
 
 class PDFTableReport(FPDF):
     def header(self):
-        # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงานตาราง (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)[cite: 8]
+        # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงานตาราง (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)
         logo_path = "image_62ecbf.png"
         if os.path.exists(logo_path):
             try:
@@ -389,6 +390,13 @@ if st.sidebar.button("⚙️ ประมวลผลสร้างรายง
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
 if st.session_state['full_pdf_path'] and os.path.exists(st.session_state['full_pdf_path']):
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("##### 👁️ ดูตัวอย่างรายงานตาราง PDF")
+    with open(st.session_state['full_pdf_path'], "rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="350px" type="application/pdf"></iframe>'
+    st.sidebar.markdown(pdf_display, unsafe_allow_html=True)
+
     with open(st.session_state['full_pdf_path'], "rb") as f:
         st.sidebar.download_button(
             label="📥 คลิกดาวน์โหลดรายงานตาราง PDF",
@@ -667,7 +675,7 @@ if not melted_all.empty:
 
         class CAPAPDF(FPDF):
             def header(self):
-                # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงาน CAPA (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)[cite: 8]
+                # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงาน CAPA (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)
                 logo_path = "image_62ecbf.png"
                 if os.path.exists(logo_path):
                     try:
@@ -831,6 +839,13 @@ if not melted_all.empty:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 
         if st.session_state['capa_pdf_path'] and os.path.exists(st.session_state['capa_pdf_path']):
+            st.markdown("---")
+            st.markdown("##### 👁️ ดูตัวอย่างรายงาน CAPA PDF ก่อนดาวน์โหลด")
+            with open(st.session_state['capa_pdf_path'], "rb") as f:
+                base64_capa = base64.b64encode(f.read()).decode('utf-8')
+            capa_display = f'<iframe src="data:application/pdf;base64,{base64_capa}" width="100%" height="600px" type="application/pdf"></iframe>'
+            st.markdown(capa_display, unsafe_allow_html=True)
+
             with open(st.session_state['capa_pdf_path'], "rb") as pdf_file:
                 st.download_button(
                     label="📥 คลิกดาวน์โหลดรายงาน CAPA PDF",
