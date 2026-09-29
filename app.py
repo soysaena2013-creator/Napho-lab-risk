@@ -37,6 +37,12 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
+# ป้องกัน Error ภาษาไทยใน FPDF ดั้งเดิมโดยการ encode/decode utf-8 สำรอง
+def safe_text(txt):
+    if not txt or pd.isnull(txt):
+        return "-"
+    return str(txt).encode('utf-8', 'ignore').decode('utf-8')
+
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
@@ -44,7 +50,7 @@ st.set_page_config(layout="wide")
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
-# --- รายชื่อคณะทำงานกลาง (Master List) แนะนำให้ตั้งชื่อไฟล์ภาพในโฟลเดอร์ signatures/ เป็นภาษาอังกฤษ ---
+# --- รายชื่อคณะทำงานกลาง (Master List) ---
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/sarawut.png"},
@@ -56,7 +62,7 @@ if 'master_reviewers' not in st.session_state:
         {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": "signatures/veluwan.png"},
     ]
 
-# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
+# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -192,15 +198,17 @@ def generate_pdf_table(dataframe):
     pdf.add_page()
     
     font_path = "Sarabun-Regular.ttf"
-    if os.path.exists(font_path):
+    has_sarabun = os.path.exists(font_path)
+    if has_sarabun:
         pdf.add_font("Sarabun", "", font_path)
         pdf.set_font("Sarabun", size=12)
     else:
         pdf.set_font("Arial", size=12)
 
-    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report - รพ.นาโพธิ์", ln=True, align='C')
-    pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
-    pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
+    pdf.cell(0, 6, txt=safe_text("Hospital Risk Incident Analysis Report - รพ.นาโพธิ์"), ln=True, align='C')
+    if has_sarabun: pdf.set_font("Sarabun", size=8)
+    else: pdf.set_font("Arial", size=8)
+    pdf.cell(0, 5, txt=safe_text(f"Total Filtered Incidents: {len(dataframe)} cases"), ln=True, align='L')
     pdf.ln(2)
 
     headers = [
@@ -210,7 +218,8 @@ def generate_pdf_table(dataframe):
     ]
     col_widths = [9, 20, 22, 14, 30, 11, 28, 28, 28, 28, 38] 
 
-    pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+    if has_sarabun: pdf.set_font("Sarabun", size=7)
+    else: pdf.set_font("Arial", size=7)
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
     
@@ -224,7 +233,7 @@ def generate_pdf_table(dataframe):
         y_curr = pdf.get_y()
         pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
         pdf.set_xy(x_curr, y_curr + 1.5)
-        pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
+        pdf.multi_cell(col_widths[i], max_h_line, txt=safe_text(h), border=0, align='C')
         pdf.set_xy(x_curr + col_widths[i], y_curr)
     
     pdf.set_xy(x_start_hdr, y_start_hdr + header_height)
@@ -272,7 +281,8 @@ def generate_pdf_table(dataframe):
 
         if pdf.get_y() + row_height > 195:
             pdf.add_page()
-            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+            if has_sarabun: pdf.set_font("Sarabun", size=7)
+            else: pdf.set_font("Arial", size=7)
             pdf.set_fill_color(41, 128, 185)
             pdf.set_text_color(255, 255, 255)
             x_start_hdr2 = pdf.get_x()
@@ -282,11 +292,12 @@ def generate_pdf_table(dataframe):
                 y_curr = pdf.get_y()
                 pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
                 pdf.set_xy(x_curr, y_curr + 1.5)
-                pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
+                pdf.multi_cell(col_widths[i], max_h_line, txt=safe_text(h), border=0, align='C')
                 pdf.set_xy(x_curr + col_widths[i], y_curr)
             pdf.set_xy(x_start_hdr2, y_start_hdr2 + header_height)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+            if has_sarabun: pdf.set_font("Sarabun", size=7)
+            else: pdf.set_font("Arial", size=7)
 
         is_even = (idx % 2 == 0)
         pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
@@ -300,7 +311,7 @@ def generate_pdf_table(dataframe):
             txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
             pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
             pdf.set_xy(x_current, y_start + 1.0)
-            pdf.multi_cell(col_widths[i], line_height, txt=str(txt_clean), border=0, align=alignments[i])
+            pdf.multi_cell(col_widths[i], line_height, txt=safe_text(txt_clean), border=0, align=alignments[i])
             pdf.set_xy(x_current + col_widths[i], y_start)
 
         pdf.set_xy(x_start, y_start + row_height)
@@ -527,20 +538,20 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
+        # --- ฟังก์ชันสร้าง PDF CAPA รายงานเดี่ยว ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
             
             font_path = "Sarabun-Regular.ttf"
-            if os.path.exists(font_path):
+            has_sarabun = os.path.exists(font_path)
+            if has_sarabun:
                 pdf.add_font("Sarabun", "", font_path)
                 pdf.set_font("Sarabun", size=14)
             else:
                 pdf.set_font("Arial", size=14)
 
-            # --- ส่วนหัวรายงาน (แทรกโลโก้ รพ.นาโพธิ์) ---
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
                 logo_resp = requests.get(logo_url)
@@ -553,18 +564,22 @@ if not melted_all.empty:
             except:
                 pass
 
-            pdf.set_font("Sarabun", 'B', 14) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 14)
-            pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
-            pdf.set_font("Sarabun", size=11) if os.path.exists(font_path) else pdf.set_font("Arial", size=11)
-            pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)", ln=True, align='C')
+            if has_sarabun: pdf.set_font("Sarabun", 'B', 14)
+            else: pdf.set_font("Arial", 'B', 14)
+            pdf.cell(0, 7, txt=safe_text("โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)"), ln=True, align='C')
+            if has_sarabun: pdf.set_font("Sarabun", size=11)
+            else: pdf.set_font("Arial", size=11)
+            pdf.cell(0, 6, txt=safe_text("กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)"), ln=True, align='C')
             pdf.ln(2)
             
-            pdf.set_font("Sarabun", 'B', 12) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 12)
-            pdf.cell(0, 7, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
+            if has_sarabun: pdf.set_font("Sarabun", 'B', 12)
+            else: pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 7, txt=safe_text("รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)"), ln=True, align='C')
             pdf.ln(3)
 
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-            pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}", ln=True)
+            if has_sarabun: pdf.set_font("Sarabun", size=10)
+            else: pdf.set_font("Arial", size=10)
+            pdf.cell(0, 6, txt=safe_text(f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}"), ln=True)
             pdf.ln(3)
 
             if fig_path and os.path.exists(fig_path):
@@ -572,22 +587,27 @@ if not melted_all.empty:
                 pdf.ln(3)
 
             pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-            pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
+            pdf.cell(0, 8, txt=safe_text("  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)"), ln=True, fill=True)
+            if has_sarabun: pdf.set_font("Sarabun", size=10)
+            else: pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=safe_text(f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}"))
             pdf.ln(3)
 
-            pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+            if has_sarabun: pdf.set_font("Sarabun", size=12)
+            else: pdf.set_font("Arial", size=12)
             pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
-            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
+            pdf.cell(0, 8, txt=safe_text("  2. แนวทางแก้ไขและป้องกัน (CAPA)"), ln=True, fill=True)
+            if has_sarabun: pdf.set_font("Sarabun", size=10)
+            else: pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=safe_text(f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}"))
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล (ป้องกัน Error พาธไฟล์ภาษาไทยด้วย try-except) ---
-            pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
-            pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-            pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
+            # --- ส่วนลงนามดิจิทัล ---
+            if has_sarabun: pdf.set_font("Sarabun", 'B', 11)
+            else: pdf.set_font("Arial", 'B', 11)
+            pdf.cell(0, 6, txt=safe_text("3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ"), ln=True)
+            if has_sarabun: pdf.set_font("Sarabun", size=9)
+            else: pdf.set_font("Arial", size=9)
             pdf.ln(2)
 
             if len(reviewers) > 0:
@@ -597,25 +617,25 @@ if not melted_all.empty:
                         pdf.add_page()
                         y_curr = pdf.get_y()
                     
-                    pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
-                    pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
-                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
+                    if has_sarabun: pdf.set_font("Sarabun", size=9)
+                    else: pdf.set_font("Arial", size=9)
+                    pdf.cell(90, 5, txt=safe_text(f"บทบาท: {rev['role']}"), ln=0)
+                    pdf.cell(90, 5, txt=safe_text(f"วันที่: {datetime.now().strftime('%Y-%m-%d')}"), ln=1)
                     
-                    # ตรวจสอบและแทรกรูปลายเซ็นโดยปลอดภัย
                     sig_file = rev.get('sig_path')
                     if sig_file:
                         try:
                             if os.path.exists(sig_file):
                                 pdf.image(sig_file, x=20, y=pdf.get_y(), h=12)
                         except Exception:
-                            pass # ข้ามหากไฟล์มีปัญหาเพื่อป้องกันแครช
+                            pass
                     
-                    pdf.cell(90, 14, txt=f"ลงชื่อ: ........................................................", ln=1)
-                    pdf.cell(90, 5, txt=f"({rev['name']})", ln=0)
-                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {rev['position']}", ln=1)
+                    pdf.cell(90, 14, txt=safe_text("ลงชื่อ: ........................................................"), ln=1)
+                    pdf.cell(90, 5, txt=safe_text(f"({rev['name']})"), ln=0)
+                    pdf.cell(90, 5, txt=safe_text(f"ตำแหน่ง: {rev['position']}"), ln=1)
                     pdf.ln(4)
             else:
-                pdf.cell(0, 6, txt="(ไม่ได้เลือกรายชื่อผู้ร่วมทบทวนในรายงานฉบับนี้)", ln=True)
+                pdf.cell(0, 6, txt=safe_text("(ไม่ได้เลือกรายชื่อผู้ร่วมทบทวนในรายงานฉบับนี้)"), ln=True)
 
             tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_pdf.name)
