@@ -557,7 +557,7 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_k")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_k")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงาน (แก้ไขปัญหาหน้าจอกระพริบ ตัด st.rerun ออก) ---
+        # --- ส่วนเลือกรายชื่อคณะทำงาน ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
         st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำและไม่มีอาการหน้าจอกระพริบ:")
@@ -606,6 +606,7 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
+            # --- แก้ไขปัญหา编码 (Encoding) โดยบังคับเรียกใช้ฟอนต์ไทยเสมอ ---
             pdf.set_font(font_name, size=14)
 
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
@@ -668,6 +669,7 @@ if not melted_all.empty:
                     y_curr = pdf.get_y()
                     if y_curr > 250:
                         pdf.add_page()
+                        pdf.set_font(font_name, '', 9) # กำหนดฟอนต์ซ้ำหลังขึ้นหน้าใหม่ ป้องกัน Error
                         y_curr = pdf.get_y()
                     
                     pdf.set_font(font_name, '', 9)
