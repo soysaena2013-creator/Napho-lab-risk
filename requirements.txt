@@ -1,7 +1,6 @@
-streamlit
-pandas
+fpdf2
 plotly
+pandas
 numpy
 requests
 matplotlib
-fpdf
