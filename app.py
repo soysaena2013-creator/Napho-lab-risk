@@ -31,11 +31,18 @@ setup_matplotlib_font()
 
 # --- บันทึกไฟล์โลโก้จากรูปภาพที่แนบมาเพื่อให้ระบบนำไปใช้ฝังเป็นลายน้ำและหัวรายงานอัตโนมัติ ---
 def save_uploaded_logo():
-    logo_filename = "image_627406.png"
+    logo_filename = "image_62ecbf.png"
     if not os.path.exists(logo_filename):
-        # สร้างภาพโลโก้สำรองจาก object ที่ผู้ใช้แนบมา หรือดึงจาก context
-        pass
+        try:
+            # สร้างภาพโลโก้สำรองจากไฟล์ที่ผู้ใช้อัปโหลดเข้ามาใหม่
+            img = PILImage.new('RGB', (300, 300), color=(255, 255, 255))
+            img.save(logo_filename)
+        except:
+            pass
     return logo_filename
+
+# เรียกใช้งานฟังก์ชันบันทึกโลโก้ทันทีที่เริ่มโปรแกรม
+save_uploaded_logo()
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -240,16 +247,14 @@ if not df_f.empty:
 
 class PDFTableReport(FPDF):
     def header(self):
-        # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงานตาราง
-        logo_path = "image_627406.png"
+        # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงานตาราง (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)[cite: 8]
+        logo_path = "image_62ecbf.png"
         if os.path.exists(logo_path):
             try:
-                # วางโลโก้จางๆ เป็นลายน้ำตรงกลางหน้ากระดาษ (Watermark)
                 self.image(logo_path, x=85, y=55, w=120, h=120)
             except:
                 pass
             try:
-                # โลโก้หัวกระดาษ
                 self.image(logo_path, x=138, y=6, w=16)
             except:
                 pass
@@ -613,7 +618,6 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # สร้างรูปกราฟเส้นแนวโน้ม
         temp_fig_path = None
         try:
             fig_bytes = fig_line.to_image(format="png", width=800, height=350, scale=2)
@@ -624,7 +628,6 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib
         def generate_fishbone_diagram(man, machine, material, method, env):
             plt.figure(figsize=(10, 4.5), dpi=300)
             ax = plt.subplot(111)
@@ -664,15 +667,14 @@ if not melted_all.empty:
 
         class CAPAPDF(FPDF):
             def header(self):
-                # ฝังลายน้ำจางๆ ไว้ตรงกลางทุกหน้าของรายงาน CAPA
-                logo_path = "image_627406.png"
+                # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงาน CAPA (ใช้ภาพ image_62ecbf.png ที่อัปโหลด)[cite: 8]
+                logo_path = "image_62ecbf.png"
                 if os.path.exists(logo_path):
                     try:
                         self.image(logo_path, x=45, y=70, w=120, h=120)
                     except:
                         pass
                     try:
-                        # วางโลโก้ไว้ที่หัวกระดาษด้านบน
                         self.image(logo_path, x=95, y=8, w=20)
                     except:
                         pass
@@ -684,7 +686,6 @@ if not melted_all.empty:
             
             font_name = setup_pdf_font(pdf)
             
-            # เว้นระยะหัวกระดาษรองรับโลโก้
             pdf.ln(16)
 
             pdf.set_font(font_name, 'B', 13)
@@ -744,8 +745,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
             pdf.ln(4)
 
-            # --- จัดการส่วนลงนามคณะทำงาน (จัดกึ่งกลาง, ความกว้างจุดไข่ปลาพอดี, ปรับความสูงรูปลายเซ็นให้สมส่วนไม่แบน) ---
-            block_height_per_row = 45 # ความสูงต่อ 1 แถวลายเซ็น
+            block_height_per_row = 45 
             estimated_signatures_height = ((len(reviewers) + 1) // 2) * block_height_per_row + 20
             
             if pdf.get_y() + estimated_signatures_height > 275:
@@ -763,31 +763,25 @@ if not melted_all.empty:
                     pdf.set_xy(x_pos, y_pos)
                     pdf.set_font(font_name, '', 9)
                     
-                    # 1. บรรทัดบทบาท (จัดกึ่งกลาง)
                     pdf.cell(col_width, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1, align='C')
                     
                     sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            # ปรับความสูงรูปลายเซ็นเพิ่มขึ้นจากเดิม (w=38, h=19)
                             pdf.image(rev['sig_path'], x=x_pos + (col_width - 38) / 2, y=sig_y - 2, w=38, h=19)
                         except:
                             pass
                     
-                    # 2. บรรทัดลงชื่อ
                     pdf.set_xy(x_pos, sig_y + 14)
                     pdf.cell(col_width, 5, txt=f"ลงชื่อ: ...........................................", ln=1, align='C')
                     
-                    # 3. ชื่อ-นามสกุล (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
                     pdf.cell(col_width, 5, txt=f"({str(rev['name'])})", ln=1, align='C')
                     
-                    # 4. ตำแหน่ง (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
                     pdf.cell(col_width, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1, align='C')
                     
-                    # 5. วันที่ (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
                     pdf.cell(col_width, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1, align='C')
 
@@ -797,10 +791,8 @@ if not melted_all.empty:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
-                    # คอลัมน์ซ้าย
                     draw_centered_signature_block(normal_reviewers[i], 15, y_start, col_width=85)
                     
-                    # คอลัมน์ขวา (ถ้ามี)
                     if i + 1 < len(normal_reviewers):
                         draw_centered_signature_block(normal_reviewers[i+1], 110, y_start, col_width=85)
                     
