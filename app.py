@@ -564,7 +564,7 @@ if not melted_all.empty:
 
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
-        st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำและไม่มีอาการหน้าจอกระพริบ:")
+        st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำ:")
 
         selected_reviewers_for_report = []
         for idx, rev in enumerate(st.session_state['master_reviewers']):
@@ -603,7 +603,7 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib (ใช้ฟอนต์ Sarabun)
+        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib
         def generate_fishbone_diagram(man, machine, material, method, env):
             plt.figure(figsize=(10, 4.5), dpi=300)
             ax = plt.subplot(111)
@@ -611,15 +611,12 @@ if not melted_all.empty:
             ax.set_ylim(0, 65)
             ax.axis('off')
 
-            # แกนหลักกระดูกสันหลัง
             plt.plot([10, 85], [32, 32], color='navy', lw=3)
-            # หัวปลา
             head_x = [85, 95, 95, 85]
             head_y = [22, 27, 37, 42]
             plt.fill(head_x, head_y, color='#e6f0fa', edgecolor='navy', lw=2)
             plt.text(90, 32, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy', fontname='Sarabun')
 
-            # กิ่งก้านด้านบน (Man, Machine, Material)
             plt.plot([25, 20], [32, 54], color='black', lw=1.5)
             plt.text(19, 56, f"Man (บุคลากร):\n{str(man)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
@@ -629,7 +626,6 @@ if not melted_all.empty:
             plt.plot([69, 64], [32, 54], color='black', lw=1.5)
             plt.text(63, 56, f"Material (วัสดุ/สารเคมี):\n{str(material)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
 
-            # กิ่งก้านด้านล่าง (Method, Environment)
             plt.plot([36, 31], [32, 10], color='black', lw=1.5)
             plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:50]}...", fontsize=7.5, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
@@ -647,21 +643,17 @@ if not melted_all.empty:
 
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None, fish_path=None, dept_df=None, budget_years=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
-            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.set_auto_page_break(auto=True, margin=10)
             
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # 1. ดึงไฟล์รูปโลโก้โรงพยาบาลที่ผู้ใช้แนบเข้ามาโดยตรง
+            # --- ดึงรูปโลโก้โรงพยาบาลมาแสดงอย่างถูกต้องแน่นอน ---
             logo_img_path = None
-            for uploaded_file in st.session_state.get('uploaded_files', []):
-                pass
-            # หากใช้ไฟล์ตัวอย่างภาพโลโก้
             logo_local_fallback = "image_5816d7.png"
             if os.path.exists(logo_local_fallback):
                 logo_img_path = logo_local_fallback
             else:
-                # ลองค้นหาไฟล์โลโก้ในเครื่องหากมี
                 for f_name in os.listdir('.'):
                     if 'image_' in f_name or 'logo' in f_name.lower():
                         logo_img_path = f_name
@@ -692,14 +684,12 @@ if not melted_all.empty:
             pdf.cell(0, 5, txt=f"รายการความเสี่ยง: {str(risk_name)} | ระดับความเสี่ยง: {str(risk_lvl)} | ปีงบประมาณ: {budget_str}", ln=True)
             pdf.ln(2)
 
-            # นำกราฟเส้นแนวโน้มมาใส่ในการทบทวน
             if fig_path and os.path.exists(fig_path):
                 pdf.set_font(font_name, 'B', 9.5)
                 pdf.cell(0, 5, txt="กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ:", ln=True)
                 pdf.image(fig_path, x=25, w=160)
                 pdf.ln(2)
 
-            # นำตารางสรุปแผนก/หน่วยงานมาใส่
             if dept_df is not None and not dept_df.empty:
                 pdf.set_font(font_name, 'B', 9.5)
                 pdf.cell(0, 5, txt="สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้:", ln=True)
@@ -719,7 +709,6 @@ if not melted_all.empty:
             pdf.cell(0, 7, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
             pdf.ln(2)
 
-            # นำภาพแผนภูมิก้างปลามาใส่
             if fish_path and os.path.exists(fish_path):
                 pdf.image(fish_path, x=15, w=180)
                 pdf.ln(2)
@@ -734,16 +723,18 @@ if not melted_all.empty:
             
             pdf.set_font(font_name, '', 9.5)
             pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
-            pdf.ln(6)
+            pdf.ln(4)
 
-            # ป้องกันหัวข้อหลักขาดตอนเมื่อขึ้นหน้าใหม่ (เว้นพื้นที่ไว้รองรับบล็อกลายเซ็น)
-            if pdf.get_y() > 210:
+            # --- จัดการส่วนลงนามคณะทำงาน (ป้องกันหัวข้อตกค้างและเว้นระยะบรรทัดไม่ให้ทับซ้อนกัน) ---
+            block_height_per_row = 38 # กำหนดความสูงต่อ 1 แถวลายเซ็น (ซ้าย/ขวาคู่กัน)
+            estimated_signatures_height = ((len(reviewers) + 1) // 2) * block_height_per_row + 20
+            
+            if pdf.get_y() + estimated_signatures_height > 275:
                 pdf.add_page()
-                pdf.ln(4)
 
             pdf.set_font(font_name, 'B', 10.5)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-            pdf.ln(4) # ขยับเว้นลงมาจากหัวข้อหลักเพิ่มขึ้น
+            pdf.ln(4)
 
             if len(reviewers) > 0:
                 normal_reviewers = [r for r in reviewers if "ผู้อำนวยการ" not in str(r['position']) and "ผู้อนุมัติ" not in str(r['role'])]
@@ -753,31 +744,36 @@ if not melted_all.empty:
                     pdf.set_xy(x_pos, y_pos)
                     pdf.set_font(font_name, '', 9)
                     
-                    pdf.cell(90, 4.5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
+                    # บรรทัดที่ 1: บทบาท
+                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
                     
                     sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 2, h=22)
+                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 1, h=18)
                         except:
                             pass
                     
-                    pdf.set_xy(x_pos, sig_y + 16)
-                    pdf.cell(90, 4.5, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    # บรรทัดที่ 2: เส้นลงชื่อ
+                    pdf.set_xy(x_pos, sig_y + 14)
+                    pdf.cell(90, 5, txt=f"ลงชื่อ: ........................................................", ln=1)
                     
+                    # บรรทัดที่ 3: ชื่อ-นามสกุล
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 4.5, txt=f"({str(rev['name'])})", ln=1)
+                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=1)
                     
+                    # บรรทัดที่ 4: ตำแหน่ง
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 4.5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
+                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
                     
+                    # บรรทัดที่ 5: วันที่
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 4.5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
+                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
 
                 i = 0
                 while i < len(normal_reviewers):
-                    if pdf.get_y() > 215:
+                    if pdf.get_y() + 38 > 280:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
@@ -785,19 +781,19 @@ if not melted_all.empty:
                     
                     if i + 1 < len(normal_reviewers):
                         draw_signature_block(normal_reviewers[i+1], 110, y_start)
-                        pdf.set_y(y_start + 36)
+                        pdf.set_y(y_start + 38)
                     else:
-                        pdf.set_y(y_start + 36)
+                        pdf.set_y(y_start + 38)
                     
                     i += 2
 
                 for rev in director_reviewers:
-                    if pdf.get_y() > 215:
+                    if pdf.get_y() + 38 > 280:
                         pdf.add_page()
                     
-                    y_start = pdf.get_y() + 4
+                    y_start = pdf.get_y() + 2
                     draw_signature_block(rev, 60, y_start)
-                    pdf.set_y(y_start + 36)
+                    pdf.set_y(y_start + 38)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
