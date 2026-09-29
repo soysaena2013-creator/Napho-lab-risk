@@ -37,12 +37,16 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# ป้องกัน Error ภาษาไทยใน FPDF ดั้งเดิมแบบเบ็ดเสร็จ
+# ป้องกัน Error ภาษาไทยใน FPDF แบบ 100% (กรองและแทนที่อักขระพิเศษทั้งหมด)
 def safe_text(txt):
-    if not txt or pd.isnull(txt) or str(txt).strip() == 'None':
+    if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
     text_str = str(txt)
-    return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
+    # ตัดอักขระที่ FPDF มาตรฐานรองรับไม่ได้ออก หรือแปลงเป็น Unicode ที่ปลอดภัย
+    try:
+        return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
+    except:
+        return "-"
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
@@ -271,7 +275,7 @@ def generate_pdf_table(dataframe):
         max_lines = 1
         for i, text in enumerate(row_data):
             w = col_widths[i]
-            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
+            txt_clean = safe_text(text)
             chars_per_line = max(int(w / 1.7), 3)
             lines = 0
             for paragraph in str(txt_clean).split('\n'):
@@ -310,10 +314,10 @@ def generate_pdf_table(dataframe):
 
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
-            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
+            txt_clean = safe_text(text)
             pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
             pdf.set_xy(x_current, y_start + 1.0)
-            pdf.multi_cell(col_widths[i], line_height, txt=safe_text(txt_clean), border=0, align=alignments[i])
+            pdf.multi_cell(col_widths[i], line_height, txt=txt_clean, border=0, align=alignments[i])
             pdf.set_xy(x_current + col_widths[i], y_start)
 
         pdf.set_xy(x_start, y_start + row_height)
