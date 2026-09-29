@@ -10,7 +10,6 @@ from fpdf import FPDF
 import tempfile
 import os
 from datetime import datetime
-from PIL import Image as PILImage
 
 # --- ตั้งค่าฟอนต์ภาษาไทยสำหรับ Matplotlib ---
 def setup_matplotlib_font():
@@ -28,13 +27,6 @@ def setup_matplotlib_font():
         plt.rcParams['font.family'] = 'Sarabun'
 
 setup_matplotlib_font()
-
-# --- บันทึกไฟล์โลโก้จากรูปภาพที่แนบมาเพื่อให้ระบบนำไปใช้ฝังเป็นลายน้ำและหัวรายงานอัตโนมัติ ---
-def save_uploaded_logo():
-    logo_filename = "image_627406.png"
-    if not os.path.exists(logo_filename):
-        pass
-    return logo_filename
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -739,7 +731,8 @@ if not melted_all.empty:
 
         if st.button("🚀 สร้างรายงาน PDF CAPA เจาะลึก"):
             try:
-                capa_pdf_result_path = generate_capa_pdf()
+                # ✅ แก้ไขการเรียกใช้และกำหนดตัวแปรให้ถูกต้องตรงกัน
+                capa_pdf_path = generate_capa_pdf()
                 st.session_state['capa_pdf_path'] = capa_pdf_path
                 
                 # บันทึกลงประวัติ session_state
@@ -747,7 +740,7 @@ if not melted_all.empty:
                     'risk_name': selected_risk_item,
                     'risk_lvl': risk_lvl_val,
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'pdf_path': capa_pdf_result_path
+                    'pdf_path': capa_pdf_path
                 })
                 st.success("สร้างรายงาน CAPA PDF สำเร็จแล้ว!")
             except Exception as e:
