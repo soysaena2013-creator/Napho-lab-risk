@@ -37,11 +37,13 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# ป้องกัน Error ภาษาไทยใน FPDF ดั้งเดิมโดยการ encode/decode utf-8 สำรอง
+# ป้องกัน Error ภาษาไทยใน FPDF ดั้งเดิมแบบเบ็ดเสร็จ
 def safe_text(txt):
     if not txt or pd.isnull(txt):
         return "-"
-    return str(txt).encode('utf-8', 'ignore').decode('utf-8')
+    # แปลงให้เป็นสตริงและแทนที่อักขระพิเศษที่ FPDF ดั้งเดิมไม่รองรับ
+    text_str = str(txt)
+    return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
