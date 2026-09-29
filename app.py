@@ -725,8 +725,8 @@ if not melted_all.empty:
             pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
             pdf.ln(4)
 
-            # --- จัดการส่วนลงนามคณะทำงาน (จัดกึ่งกลาง, ลดความกว้างจุดไข่ปลา, เพิ่มระยะห่างบรรทัดไม่ให้ทับซ้อน) ---
-            block_height_per_row = 42 # ความสูงต่อ 1 แถวลายเซ็น (รวมเว้นระยะห่างด้านล่าง)
+            # --- จัดการส่วนลงนามคณะทำงาน (จัดกึ่งกลาง, ความกว้างจุดไข่ปลาพอดี, ปรับความสูงรูปลายเซ็นให้สมส่วนไม่แบน) ---
+            block_height_per_row = 45 # ความสูงต่อ 1 แถวลายเซ็น
             estimated_signatures_height = ((len(reviewers) + 1) // 2) * block_height_per_row + 20
             
             if pdf.get_y() + estimated_signatures_height > 275:
@@ -751,13 +751,13 @@ if not melted_all.empty:
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            # วางรูปลายเซ็นกึ่งกลางคอลัมน์
-                            pdf.image(rev['sig_path'], x=x_pos + (col_width - 35) / 2, y=sig_y - 1, w=35, h=16)
+                            # ปรับความสูงรูปลายเซ็นเพิ่มขึ้นจากเดิม เพื่อไม่ให้ดูแบนราบ (กำหนดความสูง w=38, h=19)
+                            pdf.image(rev['sig_path'], x=x_pos + (col_width - 38) / 2, y=sig_y - 2, w=38, h=19)
                         except:
                             pass
                     
-                    # 2. บรรทัดลงชื่อ (ลดความกว้างเส้นจุดไข่ปลาให้กระชับขึ้น)
-                    pdf.set_xy(x_pos, sig_y + 13)
+                    # 2. บรรทัดลงชื่อ
+                    pdf.set_xy(x_pos, sig_y + 14)
                     pdf.cell(col_width, 5, txt=f"ลงชื่อ: ...........................................", ln=1, align='C')
                     
                     # 3. ชื่อ-นามสกุล (จัดกึ่งกลาง)
@@ -785,7 +785,7 @@ if not melted_all.empty:
                     if i + 1 < len(normal_reviewers):
                         draw_centered_signature_block(normal_reviewers[i+1], 110, y_start, col_width=85)
                     
-                    # เว้นระยะห่างบรรทัดเพิ่มเติมก่อนขึ้นแถวถัดไป ป้องกันไม่ให้ชิดกันเกินไป
+                    # เว้นระยะห่างบรรทัดเพิ่มเติมก่อนขึ้นแถวถัดไป
                     pdf.set_y(y_start + block_height_per_row)
                     i += 2
 
