@@ -42,7 +42,6 @@ def safe_text(txt):
         return "-"
     text_str = str(txt)
     try:
-        # ใช้แนวทางเข้ารหัสแบบรองรับ Unicode / ป้องกัน Latin-1 Error สำหรับ FPDF
         return text_str.encode('utf-8').decode('latin-1', 'ignore')
     except:
         return str(text_str).encode('ascii', 'ignore').decode('ascii', 'ignore')
@@ -61,7 +60,7 @@ if 'master_reviewers' not in st.session_state:
         {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/lalida.png"},
         {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/praneet.png"},
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/sarawut.png"},
-        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": ""}, # เว้นว่างไว้สำหรับปริ้นท์เซ็นมือ
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": ""},
     ]
 
 @st.cache_data(ttl=1)
@@ -79,7 +78,12 @@ def load_data():
         df[col] = df[col].astype(str).str.strip()
         df[col] = df[col].replace('nan', np.nan)
         
-    df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
+    date_col = next((c for c in df.columns if 'วันที่เกิด' in c or 'Date' in c), None)
+    if date_col:
+        df['Date'] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
+    else:
+        df['Date'] = pd.NaT
+        
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
     return df
 
@@ -105,15 +109,18 @@ if not df.empty:
     selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
     selected_months = [month_options[m] for m in selected_month_names]
 
-    risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
-    unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
+    risk_type_col = next((c for c in df.columns if 'ประเภทความเสี่ยง' in c), None)
+    unit_col = next((c for c in df.columns if 'หน่วยงานที่ทำให้เกิดความเสี่ยง' in c), None)
+
+    risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df[risk_type_col].dropna().unique()) if risk_type_col else []
+    unit = st.sidebar.multiselect("หน่วยงาน", df[unit_col].dropna().unique()) if unit_col else []
 
     df_f = df.copy()
     if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
     if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
     if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
-    if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
-    if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
+    if risk_type and risk_type_col: df_f = df_f[df_f[risk_type_col].isin(risk_type)]
+    if unit and unit_col: df_f = df_f[df_f[unit_col].isin(unit)]
 else:
     df_f = pd.DataFrame()
 
@@ -123,13 +130,10 @@ def extract_cause_values(row, columns_list):
         col_str = str(col).strip()
         if 'สาเหตุ' in col_str or col_str.startswith('U.') or ' U ' in col_str or col_str == 'U':
             val = str(row.get(col, ''))
-            if val and val != 'nan':
+            if val and val != 'nan' and val != 'None':
                 cause_text = val
                 break
-    if not cause_text or cause_text == 'nan':
-        if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan':
-            cause_text = str(row.iloc[20])
-    return cause_text if cause_text and cause_text != 'nan' else '-'
+    return cause_text if cause_text and cause_text != 'nan' and cause_text != 'None' else '-'
 
 def extract_v_aa_values(row, columns_list):
     v_text, aa_text = "", ""
@@ -137,20 +141,12 @@ def extract_v_aa_values(row, columns_list):
         col_str = str(col).strip()
         if col_str.startswith('V.') or ' V ' in col_str or col_str == 'V':
             val = str(row.get(col, ''))
-            if val and val != 'nan': v_text = val
+            if val and val != 'nan' and val != 'None': v_text = val
         elif col_str.startswith('AA.') or ' AA ' in col_str or col_str == 'AA':
             val = str(row.get(col, ''))
-            if val and val != 'nan': aa_text = val
+            if val and val != 'nan' and val != 'None': aa_text = val
     
-    if not v_text and not aa_text:
-        for idx_col, val_col in enumerate(row):
-            col_name = str(columns_list[idx_col])
-            if ('แก้ไข' in col_name or 'เบื้องต้น' in col_name) and 'เฉพาะหน้า' not in col_name and 'ผล' not in col_name:
-                if pd.notnull(val_col) and str(val_col) != 'nan':
-                    v_text = str(val_col)
-                    break
-
-    solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
+    solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan' and x != 'None'])
     return solve_val if solve_val else '-'
 
 st.sidebar.markdown("---")
@@ -174,12 +170,13 @@ if not df_f.empty:
     risk_cols_m = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
     if risk_cols_m:
         m_temp = df_f.melt(value_vars=risk_cols_m, value_name='R_Det').dropna(subset=['R_Det'])
-        m_temp = m_temp[m_temp['R_Det'] != '']
+        m_temp = m_temp[(m_temp['R_Det'] != '') & (m_temp['R_Det'] != 'None') & (m_temp['R_Det'] != 'nan')]
         col_m2.metric("📋 รายการความเสี่ยงย่อย", f"{len(m_temp)} รายการ")
     else:
         col_m2.metric("📋 รายการความเสี่ยงย่อย", "-")
         
-    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
+    unit_count_val = df_f[unit_col].nunique() if unit_col and unit_col in df_f.columns else 0
+    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{unit_count_val} หน่วยงาน")
     col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
 class PDFTableReport(FPDF):
@@ -236,18 +233,20 @@ def generate_pdf_table(dataframe):
 
     for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
-        unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
-        shift_val = str(row.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
+        unit_name = str(row.get(unit_col, '-')) if unit_col else '-'
+        shift_col = next((c for c in dataframe.columns if 'ช่วงเวร' in c), None)
+        shift_val = str(row.get(shift_col, '-')) if shift_col else '-'
         
         risk_desc = '-'
         for col in dataframe.columns:
-            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
+            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() not in ['', 'None', 'nan']:
                 risk_desc = str(row[col])
                 break
 
         cause_val = extract_cause_values(row, dataframe.columns)
         solve_val = extract_v_aa_values(row, dataframe.columns)
-        level_val = str(row.get('LEVEL', '-'))
+        level_col = next((c for c in dataframe.columns if c == 'LEVEL' or 'ระดับความเสี่ยง' in c), None)
+        level_val = str(row.get(level_col, '-')) if level_col else '-'
         
         immediate_fix_val = '-'
         for col in dataframe.columns:
@@ -255,8 +254,11 @@ def generate_pdf_table(dataframe):
                 immediate_fix_val = str(row.get(col, '-'))
                 break
 
-        result_val = str(row.get('ผลการแก้ไข', '-'))
-        impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
+        res_col = next((c for c in dataframe.columns if 'ผลการแก้ไข' in c), None)
+        result_val = str(row.get(res_col, '-')) if res_col else '-'
+        
+        imp_col = next((c for c in dataframe.columns if 'ผลกระทบ' in c), None)
+        impact_val = str(row.get(imp_col, '-')) if imp_col else '-'
 
         row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
 
@@ -332,10 +334,11 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
 
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
+risk_type_col_name = next((c for c in df_f.columns if 'ประเภทความเสี่ยง' in c), None)
 
-if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
+if not df_f.empty and unit_col and unit_col in df_f.columns and risk_type_col_name:
     def get_clean_unit_category(row):
-        risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
+        risk_type = str(row.get(risk_type_col_name, '')).strip()
         if 'คลินิก' in risk_type:
             if matched_event_cols:
                 ev_val = str(row.get(matched_event_cols[0], '')).strip()
@@ -346,10 +349,10 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
 
     df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
     clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
-    bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
+    bar_df = clean_bar_df.groupby([unit_col, 'Clean_Group']).size().reset_index(name='count')
     
     color_map = {'Miss (ทางคลินิก)': '#1f77b4', 'Near Miss (ทางคลินิก)': '#aec7e8', 'ความเสี่ยงทั่วไป': '#2ca02c'}
-    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
+    fig_bar = px.bar(bar_df, x=unit_col, y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
     fig_bar.update_traces(textangle=0, textposition='inside')
     fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(tickangle=-30, type='category'))
     st.plotly_chart(fig_bar, use_container_width=True)
@@ -357,8 +360,8 @@ else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
 st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
-if not df_f.empty and 'Clean_Group' in df_f.columns:
-    stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
+if not df_f.empty and 'Clean_Group' in df_f.columns and unit_col:
+    stats_df = clean_bar_df.groupby([unit_col, 'Clean_Group']).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
         if col != 'รวม': stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
@@ -369,7 +372,7 @@ else:
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-    melted_all = melted_all[melted_all['Risk_Detail'] != '']
+    melted_all = melted_all[~melted_all['Risk_Detail'].isin(['', 'None', 'nan'])]
 else:
     melted_all = pd.DataFrame()
 
@@ -380,10 +383,10 @@ if not melted_all.empty:
     matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
     
     def get_sev_from_row(risk_name):
-        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
+        sev_col = next((c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c), None)
         if not sev_col: return 'A'
         matches = df_f[df_f.isin([risk_name]).any(axis=1)]
-        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
+        return str(matches[sev_col].iloc[0]) if not matches.empty else 'A'
 
     matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
     matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
@@ -450,9 +453,8 @@ if not melted_all.empty:
         st.plotly_chart(fig_line, use_container_width=True)
 
         st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้")
-        unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
-        if unit_col_name in risk_subset.columns:
-            dept_summary = risk_subset[unit_col_name].value_counts().reset_index()
+        if unit_col and unit_col in risk_subset.columns:
+            dept_summary = risk_subset[unit_col].value_counts().reset_index()
             dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
             st.dataframe(dept_summary, use_container_width=True, hide_index=True)
         else:
@@ -466,8 +468,9 @@ if not melted_all.empty:
         table_rows = []
         for _, r in detail_view_df.iterrows():
             d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
-            u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
-            shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
+            u_name = str(r.get(unit_col, '-')) if unit_col else '-'
+            shift_col = next((c for c in detail_view_df.columns if 'ช่วงเวร' in c), None)
+            shift = str(r.get(shift_col, '-')) if shift_col else '-'
             cause_text = extract_cause_values(r, detail_view_df.columns)
             solve_text = extract_v_aa_values(r, detail_view_df.columns)
             
@@ -477,8 +480,11 @@ if not melted_all.empty:
                     imm_fix = str(r.get(col, '-'))
                     break
             
-            res_val = str(r.get('ผลการแก้ไข', '-'))
-            imp_val = str(r.get('ผลกระทบต่อคนไข้', '-'))
+            res_col = next((c for c in detail_view_df.columns if 'ผลการแก้ไข' in c), None)
+            res_val = str(r.get(res_col, '-')) if res_col else '-'
+            
+            imp_col = next((c for c in detail_view_df.columns if 'ผลกระทบ' in c), None)
+            imp_val = str(r.get(imp_col, '-')) if imp_col else '-'
             
             table_rows.append({
                 'วันที่เกิด': d_str,
