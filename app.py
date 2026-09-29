@@ -41,10 +41,11 @@ def safe_text(txt):
     if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
     text_str = str(txt)
+    # ตัดอักขระพิเศษหรือจัดการ UTF-8 ป้องกันการ Encoding Error
     try:
-        return text_str.encode('utf-8').decode('latin-1', 'ignore')
-    except:
-        return str(text_str).encode('ascii', 'ignore').decode('ascii', 'ignore')
+        return text_str.encode('utf-8', errors='ignore').decode('utf-8')
+    except Exception:
+        return str(text_str)
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
@@ -188,7 +189,6 @@ def generate_pdf_table(dataframe):
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
-    # ตรวจสอบและโหลดฟอนต์ภาษาไทย Sarabun
     font_path = "Sarabun-Regular.ttf"
     if not os.path.exists(font_path):
         try:
@@ -341,7 +341,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
                 key="download_full_pdf_btn"
             )
     except Exception as e:
-        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
+        st.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
@@ -554,7 +554,6 @@ if not melted_all.empty:
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
             
-            # โหลดฟอนต์ Sarabun สำหรับ CAPA Report PDF ด้วย
             font_path = "Sarabun-Regular.ttf"
             if not os.path.exists(font_path):
                 try:
