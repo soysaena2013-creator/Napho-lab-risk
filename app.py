@@ -9,6 +9,7 @@ from fpdf import FPDF
 import tempfile
 import os
 from datetime import datetime
+import base64
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -37,27 +38,39 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยสำหรับ FPDF ---
+# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยสำหรับ FPDF (รองรับ fpdf2) ---
 def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
+    font_bold_path = "Sarabun-Bold.ttf"
+    
+    # ดาวน์โหลดฟอนต์ Sarabun ปกติ
     if not os.path.exists(font_path):
         try:
-            font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
-            r = requests.get(font_url)
+            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf")
             if r.status_code == 200:
                 with open(font_path, "wb") as f:
                     f.write(r.content)
         except:
             pass
 
-    if os.path.exists(font_path):
+    # ดาวน์โหลดฟอนต์ Sarabun ตัวหนา
+    if not os.path.exists(font_bold_path):
         try:
-            pdf.add_font("Sarabun", "", font_path, uni=True)
-            pdf.add_font("Sarabun", "B", font_path, uni=True) # ใช้ไฟล์เดียวกันแต่รองรับตัวหนาผ่านยูนิโค้ด
-            return "Sarabun"
+            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf")
+            if r.status_code == 200:
+                with open(font_bold_path, "wb") as f:
+                    f.write(r.content)
         except:
-            return "Arial"
-    return "Arial"
+            pass
+
+    try:
+        if os.path.exists(font_path):
+            pdf.add_font("Sarabun", "", font_path)
+        if os.path.exists(font_bold_path):
+            pdf.add_font("Sarabun", "B", font_bold_path)
+        return "Sarabun"
+    except:
+        return "Arial"
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
@@ -587,7 +600,7 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และเว้นช่องลายเซ็นผู้อำนวยการว่างไว้ ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ที่ปลอดภัย (ป้องกันลิงก์ Drive เสีย/ติดหน้า HTML) ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -596,18 +609,20 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.set_font(font_name, size=14)
 
-            # --- ส่วนหัวรายงาน (แทรกโลโก้ รพ.นาโพธิ์) ---
+            # --- ส่วนหัวรายงาน (แทรกโลโก้แบบปลอดภัย: ตรวจสอบประเภทไฟล์ไม่ให้เป็น HTML) ---
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
-                logo_resp = requests.get(logo_url)
-                if logo_resp.status_code == 200:
-                    tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                logo_resp = requests.get(logo_url, timeout=5)
+                if logo_resp.status_code == 200 and b"html" not in logo_resp.content[:100].lower():
+                    tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                     tmp_logo.write(logo_resp.content)
                     tmp_logo.close()
                     pdf.image(tmp_logo.name, x=94, y=10, w=22)
                     pdf.ln(18)
+                else:
+                    pdf.ln(5)
             except:
-                pass
+                pdf.ln(5)
 
             pdf.set_font(font_name, 'B', 14)
             pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
@@ -628,6 +643,7 @@ if not melted_all.empty:
                 pdf.image(fig_path, x=15, w=180)
                 pdf.ln(3)
 
+            pdf.set_font(font_name, 'B', 11)
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
             
@@ -635,7 +651,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
             pdf.ln(3)
 
-            pdf.set_font(font_name, size=12)
+            pdf.set_font(font_name, 'B', 11)
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
             
