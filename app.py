@@ -48,11 +48,11 @@ if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": None},
         {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-	{"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-	{"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-	{"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
-	{"name": "นพ.เวฬุวัน  อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
     ]
 
 # 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
@@ -169,7 +169,6 @@ if not df_f.empty:
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     col_m1.metric("📊 อุบัติการณ์รวมทั้งหมด", f"{total_cases} เรื่อง")
     
-    # คำนวณเบื้องต้นสำหรับ Metric
     risk_cols_m = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
     if risk_cols_m:
         m_temp = df_f.melt(value_vars=risk_cols_m, value_name='R_Det').dropna(subset=['R_Det'])
@@ -452,7 +451,6 @@ if not melted_all.empty:
         else:
             st.info("ไม่พบข้อมูลคอลัมน์หน่วยงานในชุดข้อมูลนี้")
 
-        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
         detail_view_df = risk_subset.copy()
         if 'Date' in detail_view_df.columns:
