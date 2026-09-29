@@ -37,12 +37,10 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# ป้องกัน Error ภาษาไทยใน FPDF แบบ 100% (กรองและแทนที่อักขระพิเศษทั้งหมด)
 def safe_text(txt):
     if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
     text_str = str(txt)
-    # ตัดอักขระที่ FPDF มาตรฐานรองรับไม่ได้ออก หรือแปลงเป็น Unicode ที่ปลอดภัย
     try:
         return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
     except:
@@ -51,11 +49,9 @@ def safe_text(txt):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
-# --- รายชื่อคณะทำงานกลาง (Master List) ---
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/sarawut.png"},
@@ -64,10 +60,9 @@ if 'master_reviewers' not in st.session_state:
         {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/lalida.png"},
         {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/praneet.png"},
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/sarawut.png"},
-        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": "signatures/veluwan.png"},
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": ""}, # เว้นว่างไว้สำหรับปริ้นท์เซ็นมือ
     ]
 
-# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -90,9 +85,7 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters & Controls
 st.sidebar.header("เครื่องมือสืบค้น")
-
 if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
     st.cache_data.clear()
     st.rerun()
@@ -100,7 +93,6 @@ if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทัน�
 if not df.empty:
     available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
     selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
-
     quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
     month_names = {
@@ -125,7 +117,6 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
-# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุเกิดจาก (U) และ V&AA ---
 def extract_cause_values(row, columns_list):
     cause_text = ""
     for col in columns_list:
@@ -162,7 +153,6 @@ def extract_v_aa_values(row, columns_list):
     solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
-# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar แบบปลอดภัย ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
 if len(st.session_state['saved_capa_reports']) > 0:
@@ -176,7 +166,6 @@ else:
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# --- ส่วนแสดง Metric สรุปภาพรวม ---
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -193,7 +182,6 @@ if not df_f.empty:
     col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
     col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
-# --- ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -336,7 +324,6 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
-# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -363,7 +350,6 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
-# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามหน่วยงาน ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
 if not df_f.empty and 'Clean_Group' in df_f.columns:
     stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
@@ -374,7 +360,6 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-#เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
@@ -382,7 +367,6 @@ if not df_f.empty and risk_cols:
 else:
     melted_all = pd.DataFrame()
 
-# --- 3. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
 st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
@@ -427,7 +411,6 @@ if not melted_all.empty:
     fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-# --- 4. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
 
@@ -530,7 +513,6 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวน (ดึงรูปลายเซ็นจากโฟลเดอร์อัตโนมัติ)")
         st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
@@ -544,7 +526,6 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF CAPA รายงานเดี่ยว ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -608,7 +589,6 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=safe_text(f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}"))
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล ---
             if has_sarabun: pdf.set_font("Sarabun", 'B', 11)
             else: pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 6, txt=safe_text("3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ"), ln=True)
@@ -628,14 +608,18 @@ if not melted_all.empty:
                     pdf.cell(90, 5, txt=safe_text(f"บทบาท: {rev['role']}"), ln=0)
                     pdf.cell(90, 5, txt=safe_text(f"วันที่: {datetime.now().strftime('%Y-%m-%d')}"), ln=1)
                     
+                    # ตรวจสอบว่ามี path รูปลายเซ็นจริง และไฟล์มีอยู่จริงหรือไม่ ถ้าไม่มี (เช่น ผอ.) จะเว้นว่างไว้ให้เซ็นมือ
                     sig_file = rev.get('sig_path')
-                    if sig_file:
+                    signature_printed = False
+                    if sig_file and sig_file.strip() != "":
                         try:
                             if os.path.exists(sig_file):
                                 pdf.image(sig_file, x=20, y=pdf.get_y(), h=12)
+                                signature_printed = True
                         except Exception:
                             pass
                     
+                    # ถ้าไม่มีรูปลายเซ็น (เว้นว่าง) จะเว้นพื้นที่บรรทัดสำหรับเซ็นมือ
                     pdf.cell(90, 14, txt=safe_text("ลงชื่อ: ........................................................"), ln=1)
                     pdf.cell(90, 5, txt=safe_text(f"({rev['name']})"), ln=0)
                     pdf.cell(90, 5, txt=safe_text(f"ตำแหน่ง: {rev['position']}"), ln=1)
@@ -691,7 +675,7 @@ if not melted_all.empty:
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
                         mime="application/pdf"
                     )
-                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อและรูปลายเซ็นมาลงนามให้อัตโนมัติเรียบร้อยครับ")
+                st.success("สร้างรายงาน PDF สำเร็จ! ส่วนของผู้อำนวยการถูกเว้นว่างไว้สำหรับเซ็นชื่อด้วยมือเรียบร้อยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
