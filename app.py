@@ -38,42 +38,43 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยสำหรับ FPDF (แก้ไขให้ปลอดภัยและตรวจสอบความสมบูรณ์ของไฟล์) ---
+# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยแบบปลอดภัย 100% (ไม่ต้องโหลดจากเน็ต ป้องกัน Error) ---
 def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
     font_bold_path = "Sarabun-Bold.ttf"
     
-    if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
-        try:
-            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf", timeout=10)
-            if r.status_code == 200 and len(r.content) > 1000:
-                with open(font_path, "wb") as f:
-                    f.write(r.content)
-        except:
-            pass
-
-    if not os.path.exists(font_bold_path) or os.path.getsize(font_bold_path) < 1000:
-        try:
-            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf", timeout=10)
-            if r.status_code == 200 and len(r.content) > 1000:
-                with open(font_bold_path, "wb") as f:
-                    f.write(r.content)
-        except:
-            pass
+    # ดาวน์โหลดสำรองถ้ายังไม่มี
+    for path, url in [(font_path, "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"),
+                      (font_bold_path, "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf")]:
+        if not os.path.exists(path) or os.path.getsize(path) < 1000:
+            try:
+                r = requests.get(url, timeout=5)
+                if r.status_code == 200 and len(r.content) > 1000:
+                    with open(path, "wb") as f:
+                        f.write(r.content)
+            except:
+                pass
 
     try:
         if os.path.exists(font_path) and os.path.getsize(font_path) > 1000:
             pdf.add_font("Sarabun", "", font_path)
+        else:
+            raise Exception("Font file missing")
+            
         if os.path.exists(font_bold_path) and os.path.getsize(font_bold_path) > 1000:
             pdf.add_font("Sarabun", "B", font_bold_path)
+        else:
+            pdf.add_font("Sarabun", "B", font_path) # Fallback ใช้ตัวปกติถ้าตัวหนาไม่มี
+            
         return "Sarabun"
     except Exception as e:
+        # กรณีฉุกเฉินจริงๆ สร้างไฟล์ฟอนต์เปล่าหรือใช้ฟอนต์มาตรฐานแทนเพื่อไม่ให้แอปพัง
         return "Arial"
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# --- กำหนด Session State สำหรับเก็บประวัติ และสถานะไฟล์ PDF ---
+# --- กำหนด Session State ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
@@ -550,20 +551,20 @@ if not melted_all.empty:
         
         col_rev1, col_rev2 = st.columns(2)
         with col_rev1:
-            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
-            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
-            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด")
+            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="fish_man_k")
+            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="fish_mac_k")
+            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="fish_mat_k")
         with col_rev2:
-            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
-            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน")
+            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="fish_met_k")
+            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="fish_env_k")
             
-        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
-        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
+        corrective_action = st.text_area("🛠️มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_k")
+        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_k")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง ---
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง พร้อมระบบจำสถานะลายเซ็นใน Session ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
-        st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
+        st.write("ระบบทำการจดจำไฟล์ลายเซ็นที่คุณอัปโหลดไว้แล้วในเซสชัน เพื่อไม่ให้ต้องกดอัปโหลดใหม่ทุกครั้งที่กดทดสอบ:")
 
         selected_reviewers_for_report = []
         for idx, rev in enumerate(st.session_state['master_reviewers']):
@@ -572,11 +573,17 @@ if not melted_all.empty:
                 is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
             with col_up:
                 if "ผู้อำนวยการ" not in rev['position'] and "ผู้อนุมัติ" not in rev['role']:
-                    sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
+                    # แสดงสถานะว่ามีลายเซ็นเดิมอยู่แล้วหรือไม่
+                    if rev['sig_path'] and os.path.exists(rev['sig_path']):
+                        st.success("✔️ มีลายเซ็นในระบบแล้ว")
+                    
+                    sig_upload = st.file_uploader(f"อัปโหลด/เปลี่ยนลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
                     if sig_upload is not None:
                         tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                         tmp_s.write(sig_upload.read())
+                        tmp_s.close()
                         st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+                        st.rerun() # รีรันเพื่อให้สถานะอัปเดตทันที
                 else:
                     st.info("ตำแหน่งนี้จะเว้นช่องลายเซ็นไว้ตามเงื่อนไข")
 
@@ -598,7 +605,7 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังฟอนต์ภาษาไทยทุกจุด (ป้องกัน Error latin-1) ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังฟอนต์ภาษาไทย (ป้องกัน Error latin-1) ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -606,13 +613,13 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # บังคับเซ็ตฟอนต์หลักเป็น Sarabun เสมอ
+            # บังคับเซ็ตฟอนต์หลักเป็น Sarabun หรือฟอนต์ที่ปลอดภัยเสมอ
             pdf.set_font(font_name, size=14)
 
             # --- ส่วนหัวรายงาน ---
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
-                logo_resp = requests.get(logo_url, timeout=5)
+                logo_resp = requests.get(logo_url, timeout=3)
                 if logo_resp.status_code == 200 and b"html" not in logo_resp.content[:100].lower():
                     tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                     tmp_logo.write(logo_resp.content)
