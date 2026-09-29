@@ -44,7 +44,6 @@ st.set_page_config(layout="wide")
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
-# กำหนดรายชื่อคณะทำงานกลาง (Master List) ไว้ล่วงหน้า สามารถเพิ่ม/แก้ไขตรงนี้ได้เลยครับ
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
         {"name": "พว.สมชาย ใจดี", "position": "นักเทคนิคการแพทย์ชำนาญการ / ผู้จัดการความเสี่ยง", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": None},
@@ -159,6 +158,24 @@ else:
     st.sidebar.info("ยังไม่มีประวัติการบันทึกทบทวนความเสี่ยง")
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
+
+# --- ส่วนแสดง Metric สรุปภาพรวมเดิม ---
+if not df_f.empty:
+    total_cases = len(df_f)
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    col_m1.metric("📊 อุบัติการณ์รวมทั้งหมด", f"{total_cases} เรื่อง")
+    
+    # คำนวณเบื้องต้นสำหรับ Metric
+    risk_cols_m = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+    if risk_cols_m:
+        m_temp = df_f.melt(value_vars=risk_cols_m, value_name='R_Det').dropna(subset=['R_Det'])
+        m_temp = m_temp[m_temp['R_Det'] != '']
+        col_m2.metric("📋 รายการความเสี่ยงย่อย", f"{len(m_temp)} รายการ")
+    else:
+        col_m2.metric("📋 รายการความเสี่ยงย่อย", "-")
+        
+    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
+    col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
 # --- ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม ---
 class PDFTableReport(FPDF):
@@ -299,7 +316,7 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
 # --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
-st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน")
+st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
 if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
@@ -322,6 +339,19 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
     fig_bar.update_traces(textangle=0, textposition='inside')
     fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(tickangle=-30, type='category'))
     st.plotly_chart(fig_bar, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
+
+# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามหน่วยงาน ---
+st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
+if not df_f.empty and 'Clean_Group' in df_f.columns:
+    stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
+    stats_df['รวม'] = stats_df.sum(axis=1)
+    for col in stats_df.columns:
+        if col != 'รวม': stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
+    st.dataframe(stats_df, use_container_width=True)
+else:
+    st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
 #เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
@@ -331,7 +361,7 @@ if not df_f.empty and risk_cols:
 else:
     melted_all = pd.DataFrame()
 
-# --- 2. ตารางและแผนภูมิ Risk Matrix ---
+# --- 3. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
 st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
@@ -363,7 +393,20 @@ if not melted_all.empty:
         'Risk_Matrix': 'คะแนนรวม Matrix'
     }), use_container_width=True)
 
-# --- 3. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
+    st.subheader("🗺️ แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+
+    fig_matrix = px.scatter(
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5],
+        labels={'x_jitter': 'คะแนนความถี่ (Frequency Score)', 'y_jitter': 'คะแนนความรุนแรง (Severity Score)'}
+    )
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+# --- 4. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
 
@@ -396,10 +439,61 @@ if not melted_all.empty:
         fig_line = px.line(merged_trend, x='Month_Label', y='Count', color='Year_Label_Str', markers=True, text='Count')
         st.plotly_chart(fig_line, use_container_width=True)
 
-        st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนกสำหรับรายการนี้")
+        st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้")
         unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
         if unit_col_name in risk_subset.columns:
-            st.dataframe(risk_subset[unit_col_name].value_counts().reset_index(name='จำนวนครั้ง (เรื่อง)').rename(columns={'index': 'หน่วยงาน/แผนก'}), use_container_width=True, hide_index=True)
+            dept_summary = risk_subset[unit_col_name].value_counts().reset_index()
+            dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
+            st.dataframe(dept_summary, use_container_width=True, hide_index=True)
+        else:
+            st.info("ไม่พบข้อมูลคอลัมน์หน่วยงานในชุดข้อมูลนี้")
+
+        # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
+        st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
+        detail_view_df = risk_subset.copy()
+        if 'Date' in detail_view_df.columns:
+            detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
+        
+        table_rows = []
+        for _, r in detail_view_df.iterrows():
+            d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
+            u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+            shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
+            cause_text = extract_cause_values(r, detail_view_df.columns)
+            solve_text = extract_v_aa_values(r, detail_view_df.columns)
+            
+            imm_fix = '-'
+            for col in detail_view_df.columns:
+                if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
+                    imm_fix = str(r.get(col, '-'))
+                    break
+            
+            res_val = str(r.get('ผลการแก้ไข', '-'))
+            imp_val = str(r.get('ผลกระทบต่อคนไข้', '-'))
+            
+            table_rows.append({
+                'วันที่เกิด': d_str,
+                'หน่วยงาน': u_name,
+                'ช่วงเวร': shift,
+                'สาเหตุเกิดจาก (U)': cause_text,
+                'การแก้ไขเบื้องต้น (V & AA)': solve_text,
+                'การแก้ไขปัญหาเฉพาะหน้า': imm_fix,
+                'ผลการแก้ไข': res_val,
+                'ผลกระทบกับคนไข้': imp_val
+            })
+            
+        sub_df_display = pd.DataFrame(table_rows)
+        if not sub_df_display.empty:
+            html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
+            custom_css = """
+            <style>
+            .table-custom { width: 100% !important; border-collapse: collapse; font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 14px; }
+            .table-custom th, .table-custom td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; word-break: break-word; white-space: normal; }
+            .table-custom th { background-color: #f8f9fa; font-weight: bold; text-align: center; }
+            .table-container { max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 20px; }
+            </style>
+            """
+            st.markdown(f'<div class="table-container">{custom_css}{html_table}</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("##### 🔍 วิเคราะห์สาเหตุ (ก้างปลา 5M1E) และจัดทำมาตรการ CAPA")
@@ -427,7 +521,6 @@ if not melted_all.empty:
             with col_chk:
                 is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
             with col_up:
-                # อนุญาตให้อัปโหลดรูปลายเซ็นเฉพาะบุคคลนั้นๆ เก็บไว้ในระบบกลางได้
                 sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
                 if sig_upload is not None:
                     tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
@@ -498,7 +591,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล (แสดงรายชื่อที่เลือกจาก Master List) ---
+            # --- ส่วนลงนามดิจิทัล ---
             pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
