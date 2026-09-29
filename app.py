@@ -41,17 +41,14 @@ def safe_text(txt):
     if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
     try:
-        # แปลงข้อมูลเป็น string และจัดการเปลี่ยน encoding ป้องกันไบต์ขยะ 0x80 ที่ทำให้เกิด error
         if isinstance(txt, bytes):
-            text_str = txt.decode('latin1', errors='ignore')
+            text_str = txt.decode('utf-8', errors='ignore')
         else:
             text_str = str(txt)
-        
-        # กรองอักขระควบคุมและไบต์แปลกปลอมออก
-        clean_str = "".join(c for c in text_str if ord(c) == 9 or ord(c) == 10 or ord(c) == 13 or ord(c) >= 32)
-        return clean_str
+        # ป้องกันปัญหาไบต์เกิน 0x80 หรือรหัสพิเศษที่ทำให้ FPDF แครช
+        return text_str.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
     except Exception:
-        return "".join([c for c in str(txt) if ord(c) < 128])
+        return "-"
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
@@ -76,7 +73,17 @@ def load_data():
     try:
         response = requests.get(url)
         response.raise_for_status()
-        df = pd.read_csv(io.BytesIO(response.content))
+        content = response.content
+        # วนลูปทดสอบการอ่าน Encoding หลายรูปแบบเพื่อป้องกันปัญหาไบต์ 0x80
+        df = None
+        for enc in ['utf-8', 'tis-620', 'cp1252', 'utf-8-sig']:
+            try:
+                df = pd.read_csv(io.BytesIO(content), encoding=enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if df is None:
+            df = pd.read_csv(io.BytesIO(content), encoding='utf-8', errors='ignore')
     except Exception as e:
         return pd.DataFrame()
     
