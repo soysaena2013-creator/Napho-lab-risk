@@ -40,12 +40,17 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง และรายชื่อผู้ร่วมทบทวน ---
+# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง และรายชื่อคณะทำงานกลาง ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
-if 'reviewers_list' not in st.session_state:
-    st.session_state['reviewers_list'] = []
+# กำหนดรายชื่อคณะทำงานกลาง (Master List) ไว้ล่วงหน้า สามารถเพิ่ม/แก้ไขตรงนี้ได้เลยครับ
+if 'master_reviewers' not in st.session_state:
+    st.session_state['master_reviewers'] = [
+        {"name": "พว.สมชาย ใจดี", "position": "นักเทคนิคการแพทย์ชำนาญการ / ผู้จัดการความเสี่ยง", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "ทนม.สมหญิง รักงาน", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ตรวจสอบ", "sig_path": None},
+        {"name": "ดร.พญ.สมศรี มีสุข", "position": "หัวหน้ากลุ่มงานพยาธิวิทยาคลินิก", "role": "ผู้อนุมัติ CAPA", "sig_path": None}
+    ]
 
 # 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
 @st.cache_data(ttl=1)
@@ -358,9 +363,9 @@ if not melted_all.empty:
         'Risk_Matrix': 'คะแนนรวม Matrix'
     }), use_container_width=True)
 
-# --- 3. ฟังก์ชันทบทวนความเสี่ยง และระบบลงนามดิจิทัลหลายคน ---
+# --- 3. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
 st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและระบบลงนามดิจิทัล (Trend, 5M1E & Multi-Signatures)")
+st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
 
 if not melted_all.empty:
     unique_risks = sorted(melted_all['Risk_Detail'].unique())
@@ -411,46 +416,33 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-        # --- ส่วนจัดการรายชื่อผู้ร่วมทบทวนหลายคน & อัปโหลดลายเซ็นดิจิทัล ---
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (Master List) ---
         st.markdown("---")
-        st.markdown("##### ✍️ จัดการรายชื่อผู้ร่วมทบทวน & ลายเซ็นดิจิทัล (หลายคน)")
-        
-        with st.form(key="add_reviewer_form", clear_on_submit=True):
-            rc1, rc2, rc3 = st.columns(3)
-            with rc1:
-                r_name = st.text_input("ชื่อ-นามสกุล ผู้ทบทวน:")
-            with rc2:
-                r_pos = st.text_input("ตำแหน่ง:")
-            with rc3:
-                r_role = st.selectbox("บทบาท:", ["ผู้ทบทวนความเสี่ยง", "ผู้ตรวจสอบ", "ผู้อนุมัติ CAPA"])
-            
-            r_sig_file = st.file_uploader("อัปโหลดรูปลายเซ็นดิจิทัล (PNG พื้นหลังโปร่งใส):", type=["png", "jpg", "jpeg"])
-            add_btn = st.form_submit_button("➕ เพิ่มรายชื่อนี้เข้าสู่คณะทำงาน")
-            
-            if add_btn and r_name:
-                sig_path = None
-                if r_sig_file is not None:
-                    tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                    tmp_s.write(r_sig_file.read())
-                    sig_path = tmp_s.name
-                st.session_state['reviewers_list'].append({"name": r_name, "position": r_pos, "role": r_role, "sig_path": sig_path})
-                st.success(f"เพิ่มคุณ {r_name} เรียบร้อยแล้ว!")
+        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
+        st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
 
-        if len(st.session_state['reviewers_list']) > 0:
-            st.write("📋 **รายชื่อคณะทำงานที่บันทึกไว้สำหรับรายงานฉบับนี้:**")
-            for i, rev in enumerate(st.session_state['reviewers_list']):
-                c_a, c_b, c_c = st.columns([3, 3, 1])
-                c_a.write(f"{i+1}. {rev['name']} ({rev['position']})")
-                c_b.write(f"บทบาท: {rev['role']}")
-                if c_c.button("ลบ", key=f"del_r_{i}"):
-                    st.session_state['reviewers_list'].pop(i)
-                    st.rerun()
+        selected_reviewers_for_report = []
+        for idx, rev in enumerate(st.session_state['master_reviewers']):
+            col_chk, col_up = st.columns([3, 2])
+            with col_chk:
+                is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
+            with col_up:
+                # อนุญาตให้อัปโหลดรูปลายเซ็นเฉพาะบุคคลนั้นๆ เก็บไว้ในระบบกลางได้
+                sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
+                if sig_upload is not None:
+                    tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    tmp_s.write(sig_upload.read())
+                    st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+
+            if is_selected:
+                selected_reviewers_for_report.append(st.session_state['master_reviewers'][idx])
+            st.markdown("---")
 
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้โรงพยาบาลนาโพธิ์ และบล็อกลายเซ็นดิจิทัลหลายคน ---
-        def generate_capa_pdf_with_logo(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
+        def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
@@ -463,7 +455,6 @@ if not melted_all.empty:
                 pdf.set_font("Arial", size=14)
 
             # --- ส่วนหัวรายงาน (แทรกโลโก้ รพ.นาโพธิ์) ---
-            # ดึงรูปโลโก้จาก Drive ที่แนบมาแปะหัวกระดาษ PDF
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
                 logo_resp = requests.get(logo_url)
@@ -471,9 +462,8 @@ if not melted_all.empty:
                     tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
                     tmp_logo.write(logo_resp.content)
                     tmp_logo.close()
-                    # วางโลโก้ตรงกลางด้านบน (ขนาดความกว้าง 22 มม.)
                     pdf.image(tmp_logo.name, x=94, y=10, w=22)
-                    pdf.ln(18) # เว้นบรรทัดหลบโลโก้
+                    pdf.ln(18)
             except:
                 pass
 
@@ -508,7 +498,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล (แสดงรายชื่อและรูปลายเซ็นของคณะทำงานหลายคน) ---
+            # --- ส่วนลงนามดิจิทัล (แสดงรายชื่อที่เลือกจาก Master List) ---
             pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
@@ -517,14 +507,13 @@ if not melted_all.empty:
             if len(reviewers) > 0:
                 for rev in reviewers:
                     y_curr = pdf.get_y()
-                    if y_curr > 250: # ถ้าหน้ากระดาษหมด ให้ขึ้นหน้าใหม่
+                    if y_curr > 250:
                         pdf.add_page()
                         y_curr = pdf.get_y()
                     
                     pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
                     pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
-                    # ถ้ามีการอัปโหลดรูปลายเซ็น นำมาแปะ
                     if rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
                             pdf.image(rev['sig_path'], x=20, y=pdf.get_y(), h=12)
@@ -536,13 +525,13 @@ if not melted_all.empty:
                     pdf.cell(90, 5, txt=f"ตำแหน่ง: {rev['position']}", ln=1)
                     pdf.ln(4)
             else:
-                pdf.cell(0, 6, txt="(ยังไม่มีการบันทึกรายชื่อผู้ร่วมทบทวนในระบบ)", ln=True)
+                pdf.cell(0, 6, txt="(ไม่ได้เลือกรายชื่อผู้ร่วมทบทวนในรายงานฉบับนี้)", ln=True)
 
             tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_pdf.name)
             return tmp_pdf.name
 
-        if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) พร้อมโลโก้ รพ. และลายเซ็นดิจิทัล"):
+        if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) พร้อมรายชื่อคณะทำงานที่เลือก"):
             try:
                 plt.figure(figsize=(8, 3.5), dpi=300)
                 plt.plot(list(thai_budget_months.values()), merged_trend['Count'], marker='o', color='#1f77b4', linewidth=2, markersize=6)
@@ -568,15 +557,15 @@ if not melted_all.empty:
                     'env': fish_env,
                     'corr_act': corrective_action,
                     'prev_act': preventive_action,
-                    'reviewers': st.session_state['reviewers_list'],
+                    'reviewers': selected_reviewers_for_report,
                     'fig_path': fig_img_path
                 }
                 st.session_state['saved_capa_reports'].append(report_data)
 
-                pdf_file_path = generate_capa_pdf_with_logo(
+                pdf_file_path = generate_capa_pdf_with_master_list(
                     selected_risk_item, risk_lvl_val, 
                     fish_man, fish_machine, fish_material, fish_method, fish_env,
-                    corrective_action, preventive_action, st.session_state['reviewers_list'], fig_img_path
+                    corrective_action, preventive_action, selected_reviewers_for_report, fig_img_path
                 )
                 
                 with open(pdf_file_path, "rb") as f:
@@ -586,7 +575,7 @@ if not melted_all.empty:
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
                         mime="application/pdf"
                     )
-                st.success("สร้างรายงาน PDF พร้อมโลโก้โรงพยาบาลและลายเซ็นดิจิทัลสำเร็จเรียบร้อยแล้ว!")
+                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อคณะทำงานมาลงนามให้อัตโนมัติเรียบร้อยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
