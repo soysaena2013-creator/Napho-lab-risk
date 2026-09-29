@@ -42,9 +42,10 @@ def safe_text(txt):
         return "-"
     text_str = str(txt)
     try:
-        return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
+        # ใช้แนวทางเข้ารหัสแบบรองรับ Unicode / ป้องกัน Latin-1 Error สำหรับ FPDF
+        return text_str.encode('utf-8').decode('latin-1', 'ignore')
     except:
-        return "-"
+        return str(text_str).encode('ascii', 'ignore').decode('ascii', 'ignore')
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
@@ -71,7 +72,6 @@ def load_data():
         response.raise_for_status()
         df = pd.read_csv(io.BytesIO(response.content))
     except Exception as e:
-        st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
         return pd.DataFrame()
     
     df.columns = df.columns.str.strip()
@@ -320,7 +320,13 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
     try:
         pdf_path = generate_pdf_table(df_f)
         with open(pdf_path, "rb") as f:
-            st.sidebar.download_button("คลิกเพื่อบันทึกไฟล์ PDF", f, file_name="Risk_Full_Report.pdf", mime="application/pdf")
+            st.sidebar.download_button(
+                label="คลิกเพื่อบันทึกไฟล์ PDF", 
+                data=f, 
+                file_name="Risk_Full_Report.pdf", 
+                mime="application/pdf",
+                key="download_full_pdf_btn"
+            )
     except Exception as e:
         st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
@@ -503,15 +509,15 @@ if not melted_all.empty:
         
         col_rev1, col_rev2 = st.columns(2)
         with col_rev1:
-            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
-            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
-            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด")
+            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="fish_man_input")
+            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="fish_machine_input")
+            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="fish_material_input")
         with col_rev2:
-            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
-            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน")
+            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="fish_method_input")
+            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="fish_env_input")
             
-        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
-        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
+        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_input")
+        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_input")
 
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวน (ดึงรูปลายเซ็นจากโฟลเดอร์อัตโนมัติ)")
@@ -608,18 +614,14 @@ if not melted_all.empty:
                     pdf.cell(90, 5, txt=safe_text(f"บทบาท: {rev['role']}"), ln=0)
                     pdf.cell(90, 5, txt=safe_text(f"วันที่: {datetime.now().strftime('%Y-%m-%d')}"), ln=1)
                     
-                    # ตรวจสอบว่ามี path รูปลายเซ็นจริง และไฟล์มีอยู่จริงหรือไม่ ถ้าไม่มี (เช่น ผอ.) จะเว้นว่างไว้ให้เซ็นมือ
                     sig_file = rev.get('sig_path')
-                    signature_printed = False
                     if sig_file and sig_file.strip() != "":
                         try:
                             if os.path.exists(sig_file):
                                 pdf.image(sig_file, x=20, y=pdf.get_y(), h=12)
-                                signature_printed = True
                         except Exception:
                             pass
                     
-                    # ถ้าไม่มีรูปลายเซ็น (เว้นว่าง) จะเว้นพื้นที่บรรทัดสำหรับเซ็นมือ
                     pdf.cell(90, 14, txt=safe_text("ลงชื่อ: ........................................................"), ln=1)
                     pdf.cell(90, 5, txt=safe_text(f"({rev['name']})"), ln=0)
                     pdf.cell(90, 5, txt=safe_text(f"ตำแหน่ง: {rev['position']}"), ln=1)
@@ -673,9 +675,10 @@ if not melted_all.empty:
                         label="📥 คลิกดาวน์โหลดเอกสาร PDF (รพ.นาโพธิ์)",
                         data=f,
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
-                        mime="application/pdf"
+                        mime="application/pdf",
+                        key="download_capa_pdf_btn"
                     )
-                st.success("สร้างรายงาน PDF สำเร็จ! ส่วนของผู้อำนวยการถูกเว้นว่างไว้สำหรับเซ็นชื่อด้วยมือเรียบร้อยครับ")
+                st.success("สร้างรายงาน PDF สำเร็จ! สามารถคลิกปุ่มดาวน์โหลดด้านบนได้เลยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
