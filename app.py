@@ -40,19 +40,20 @@ def get_thai_budget_year(date):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
-# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง และรายชื่อคณะทำงานกลาง ---
+# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
+# --- รายชื่อคณะทำงานกลาง (Master List) ดึงรูปลายเซ็นอัตโนมัติจากโฟลเดอร์ signatures/ ---
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
-        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/ทนพ.ศราวุธ สร้อยเสนา.png"},
+        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/ทนพญ.ปรีดา ชาไข.png"},
+        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/ทนพญ.รุ่งนภา สอนจันทร์.png"},
+        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/นางสาวลลิดา แก้วบุดศา.png"},
+        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/นางสาวประณีต มิ่งไธสง.png"},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/ทนพ.ศราวุธ สร้อยเสนา.png"},
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": "signatures/นพ.เวฬุวัน อินทอง.png"},
     ]
 
 # 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
@@ -512,26 +513,22 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (Master List) ---
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (ดึงลายเซ็นจากโฟลเดอร์อัตโนมัติ) ---
         st.markdown("---")
-        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
+        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวน (ดึงรูปลายเซ็นจากโฟลเดอร์อัตโนมัติ)")
         st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
 
         selected_reviewers_for_report = []
         for idx, rev in enumerate(st.session_state['master_reviewers']):
-            col_chk, col_up = st.columns([3, 2])
-            with col_chk:
-                is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
-            with col_up:
-                sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
-                if sig_upload is not None:
-                    tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                    tmp_s.write(sig_upload.read())
-                    st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
-
+            is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']}) - *{rev['position']}*", value=True, key=f"chk_rev_{idx}")
             if is_selected:
-                selected_reviewers_for_report.append(st.session_state['master_reviewers'][idx])
-            st.markdown("---")
+                # ตรวจสอบว่าไฟล์รูปลายเซ็นมีอยู่จริงในโฟลเดอร์หรือไม่
+                if rev['sig_path'] and os.path.exists(rev['sig_path']):
+                    rev_data = rev.copy()
+                else:
+                    rev_data = rev.copy()
+                    rev_data['sig_path'] = None # ถ้ายังไม่ได้ใส่ไฟล์ในโฟลเดอร์ จะเว้นว่างไว้ก่อน
+                selected_reviewers_for_report.append(rev_data)
 
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
@@ -670,7 +667,7 @@ if not melted_all.empty:
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
                         mime="application/pdf"
                     )
-                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อคณะทำงานมาลงนามให้อัตโนมัติเรียบร้อยครับ")
+                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อและรูปลายเซ็นจากโฟลเดอร์มาลงนามให้อัตโนมัติเรียบร้อยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
