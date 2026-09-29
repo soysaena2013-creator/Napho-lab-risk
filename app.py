@@ -522,18 +522,12 @@ if not melted_all.empty:
         for idx, rev in enumerate(st.session_state['master_reviewers']):
             is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']}) - *{rev['position']}*", value=True, key=f"chk_rev_{idx}")
             if is_selected:
-                # ตรวจสอบว่าไฟล์รูปลายเซ็นมีอยู่จริงในโฟลเดอร์หรือไม่
-                if rev['sig_path'] and os.path.exists(rev['sig_path']):
-                    rev_data = rev.copy()
-                else:
-                    rev_data = rev.copy()
-                    rev_data['sig_path'] = None # ถ้ายังไม่ได้ใส่ไฟล์ในโฟลเดอร์ จะเว้นว่างไว้ก่อน
-                selected_reviewers_for_report.append(rev_data)
+                selected_reviewers_for_report.append(rev.copy())
 
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก (แก้ปัญหาฟอนต์ภาษาไทย) ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -590,7 +584,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล ---
+            # --- ส่วนลงนามดิจิทัล (บังคับใช้ฟอนต์ Sarabun เพื่อรองรับภาษาไทย) ---
             pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
@@ -603,6 +597,7 @@ if not melted_all.empty:
                         pdf.add_page()
                         y_curr = pdf.get_y()
                     
+                    pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
                     pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
                     pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
