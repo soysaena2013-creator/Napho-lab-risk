@@ -39,9 +39,8 @@ def get_thai_budget_year(date):
 
 # ป้องกัน Error ภาษาไทยใน FPDF ดั้งเดิมแบบเบ็ดเสร็จ
 def safe_text(txt):
-    if not txt or pd.isnull(txt):
+    if not txt or pd.isnull(txt) or str(txt).strip() == 'None':
         return "-"
-    # แปลงให้เป็นสตริงและแทนที่อักขระพิเศษที่ FPDF ดั้งเดิมไม่รองรับ
     text_str = str(txt)
     return text_str.encode('latin-1', 'ignore').decode('latin-1') if all(ord(c) < 256 for c in text_str) else text_str
 
@@ -159,20 +158,21 @@ def extract_v_aa_values(row, columns_list):
     solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
-# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar ---
+# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar แบบปลอดภัย ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
 if len(st.session_state['saved_capa_reports']) > 0:
     for idx, report in enumerate(st.session_state['saved_capa_reports']):
-        with st.sidebar.expander(f"🔹 {idx+1}. {report['risk_name'][:25]}..."):
-            st.write(f"**ระดับ:** {report['risk_lvl']}")
-            st.write(f"**บันทึกเมื่อ:** {report['timestamp']}")
+        risk_title_safe = str(report.get('risk_name', 'รายงาน'))
+        with st.sidebar.expander(f"🔹 {idx+1}. {risk_title_safe[:25]}..."):
+            st.write(f"**ระดับ:** {report.get('risk_lvl', '-')}")
+            st.write(f"**บันทึกเมื่อ:** {report.get('timestamp', '-')}")
 else:
     st.sidebar.info("ยังไม่มีประวัติการบันทึกทบทวนความเสี่ยง")
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# --- ส่วนแสดง Metric สรุปภาพรวมเดิม ---
+# --- ส่วนแสดง Metric สรุปภาพรวม ---
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
