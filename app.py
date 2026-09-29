@@ -43,7 +43,6 @@ def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
     font_bold_path = "Sarabun-Bold.ttf"
     
-    # ดาวน์โหลดฟอนต์ Sarabun ปกติผ่าน GitHub Raw หรือ CDN ที่เสถียร
     if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
         try:
             r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf", timeout=10)
@@ -53,7 +52,6 @@ def setup_pdf_font(pdf):
         except:
             pass
 
-    # ดาวน์โหลดฟอนต์ Sarabun ตัวหนา
     if not os.path.exists(font_bold_path) or os.path.getsize(font_bold_path) < 1000:
         try:
             r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf", timeout=10)
@@ -600,13 +598,15 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ที่ปลอดภัย ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังฟอนต์ภาษาไทยทุกจุด (ป้องกัน Error latin-1) ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
             
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
+            
+            # บังคับเซ็ตฟอนต์หลักเป็น Sarabun เสมอ
             pdf.set_font(font_name, size=14)
 
             # --- ส่วนหัวรายงาน ---
@@ -627,7 +627,7 @@ if not melted_all.empty:
             pdf.set_font(font_name, 'B', 14)
             pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
             
-            pdf.set_font(font_name, size=11)
+            pdf.set_font(font_name, '', 11)
             pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)", ln=True, align='C')
             pdf.ln(2)
             
@@ -635,8 +635,8 @@ if not melted_all.empty:
             pdf.cell(0, 7, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
             pdf.ln(3)
 
-            pdf.set_font(font_name, size=10)
-            pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}", ln=True)
+            pdf.set_font(font_name, '', 10)
+            pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {str(risk_name)} | ระดับความเสี่ยง: {str(risk_lvl)}", ln=True)
             pdf.ln(3)
 
             if fig_path and os.path.exists(fig_path):
@@ -647,23 +647,23 @@ if not melted_all.empty:
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
             
-            pdf.set_font(font_name, size=10)
-            pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
+            pdf.set_font(font_name, '', 10)
+            pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {str(man)}\n- เครื่องมือ (Machine): {str(machine)}\n- วัสดุ/สารเคมี (Material): {str(material)}\n- กระบวนการ (Method): {str(method)}\n- สิ่งแวดล้อม (Environment): {str(env)}")
             pdf.ln(3)
 
             pdf.set_font(font_name, 'B', 11)
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
             
-            pdf.set_font(font_name, size=10)
-            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
+            pdf.set_font(font_name, '', 10)
+            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
             pdf.ln(8)
 
             # --- ส่วนลงนามดิจิทัล ---
             pdf.set_font(font_name, 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             
-            pdf.set_font(font_name, size=9)
+            pdf.set_font(font_name, '', 9)
             pdf.ln(2)
 
             if len(reviewers) > 0:
@@ -673,10 +673,11 @@ if not melted_all.empty:
                         pdf.add_page()
                         y_curr = pdf.get_y()
                     
-                    pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
+                    pdf.set_font(font_name, '', 9)
+                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=0)
                     pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
-                    is_director = ("ผู้อำนวยการ" in rev['position'] or "ผู้อนุมัติ" in rev['role'])
+                    is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
@@ -685,8 +686,8 @@ if not melted_all.empty:
                             pass
                     
                     pdf.cell(90, 14, txt=f"ลงชื่อ: ........................................................", ln=1)
-                    pdf.cell(90, 5, txt=f"({rev['name']})", ln=0)
-                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {rev['position']}", ln=1)
+                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=0)
+                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
                     pdf.ln(4)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
