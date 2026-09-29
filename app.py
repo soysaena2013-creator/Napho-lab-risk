@@ -725,8 +725,8 @@ if not melted_all.empty:
             pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
             pdf.ln(4)
 
-            # --- จัดการส่วนลงนามคณะทำงาน (ป้องกันหัวข้อตกค้างและเว้นระยะบรรทัดไม่ให้ทับซ้อนกัน) ---
-            block_height_per_row = 38 # กำหนดความสูงต่อ 1 แถวลายเซ็น (ซ้าย/ขวาคู่กัน)
+            # --- จัดการส่วนลงนามคณะทำงาน (จัดกึ่งกลาง, ลดความกว้างจุดไข่ปลา, เพิ่มระยะห่างบรรทัดไม่ให้ทับซ้อน) ---
+            block_height_per_row = 42 # ความสูงต่อ 1 แถวลายเซ็น (รวมเว้นระยะห่างด้านล่าง)
             estimated_signatures_height = ((len(reviewers) + 1) // 2) * block_height_per_row + 20
             
             if pdf.get_y() + estimated_signatures_height > 275:
@@ -740,60 +740,62 @@ if not melted_all.empty:
                 normal_reviewers = [r for r in reviewers if "ผู้อำนวยการ" not in str(r['position']) and "ผู้อนุมัติ" not in str(r['role'])]
                 director_reviewers = [r for r in reviewers if "ผู้อำนวยการ" in str(r['position']) or "ผู้อนุมัติ" in str(r['role'])]
 
-                def draw_signature_block(rev, x_pos, y_pos):
+                def draw_centered_signature_block(rev, x_pos, y_pos, col_width=90):
                     pdf.set_xy(x_pos, y_pos)
                     pdf.set_font(font_name, '', 9)
                     
-                    # บรรทัดที่ 1: บทบาท
-                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
+                    # 1. บรรทัดบทบาท (จัดกึ่งกลาง)
+                    pdf.cell(col_width, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1, align='C')
                     
                     sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 1, h=18)
+                            # วางรูปลายเซ็นกึ่งกลางคอลัมน์
+                            pdf.image(rev['sig_path'], x=x_pos + (col_width - 35) / 2, y=sig_y - 1, w=35, h=16)
                         except:
                             pass
                     
-                    # บรรทัดที่ 2: เส้นลงชื่อ
-                    pdf.set_xy(x_pos, sig_y + 14)
-                    pdf.cell(90, 5, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    # 2. บรรทัดลงชื่อ (ลดความกว้างเส้นจุดไข่ปลาให้กระชับขึ้น)
+                    pdf.set_xy(x_pos, sig_y + 13)
+                    pdf.cell(col_width, 5, txt=f"ลงชื่อ: ...........................................", ln=1, align='C')
                     
-                    # บรรทัดที่ 3: ชื่อ-นามสกุล
+                    # 3. ชื่อ-นามสกุล (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=1)
+                    pdf.cell(col_width, 5, txt=f"({str(rev['name'])})", ln=1, align='C')
                     
-                    # บรรทัดที่ 4: ตำแหน่ง
+                    # 4. ตำแหน่ง (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
+                    pdf.cell(col_width, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1, align='C')
                     
-                    # บรรทัดที่ 5: วันที่
+                    # 5. วันที่ (จัดกึ่งกลาง)
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
+                    pdf.cell(col_width, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1, align='C')
 
                 i = 0
                 while i < len(normal_reviewers):
-                    if pdf.get_y() + 38 > 280:
+                    if pdf.get_y() + block_height_per_row > 280:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
-                    draw_signature_block(normal_reviewers[i], 15, y_start)
+                    # คอลัมน์ซ้าย
+                    draw_centered_signature_block(normal_reviewers[i], 15, y_start, col_width=85)
                     
+                    # คอลัมน์ขวา (ถ้ามี)
                     if i + 1 < len(normal_reviewers):
-                        draw_signature_block(normal_reviewers[i+1], 110, y_start)
-                        pdf.set_y(y_start + 38)
-                    else:
-                        pdf.set_y(y_start + 38)
+                        draw_centered_signature_block(normal_reviewers[i+1], 110, y_start, col_width=85)
                     
+                    # เว้นระยะห่างบรรทัดเพิ่มเติมก่อนขึ้นแถวถัดไป ป้องกันไม่ให้ชิดกันเกินไป
+                    pdf.set_y(y_start + block_height_per_row)
                     i += 2
 
                 for rev in director_reviewers:
-                    if pdf.get_y() + 38 > 280:
+                    if pdf.get_y() + block_height_per_row > 280:
                         pdf.add_page()
                     
                     y_start = pdf.get_y() + 2
-                    draw_signature_block(rev, 60, y_start)
-                    pdf.set_y(y_start + 38)
+                    draw_centered_signature_block(rev, 60, y_start, col_width=90)
+                    pdf.set_y(y_start + block_height_per_row)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
