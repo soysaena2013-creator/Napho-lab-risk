@@ -29,7 +29,14 @@ def setup_matplotlib_font():
 
 setup_matplotlib_font()
 
-# --- ฟังก์ชันสนับสนุนและการประเมินความเสี่ยง (Metrics & Risk Matrix) ---
+# --- บันทึกไฟล์โลโก้จากรูปภาพที่แนบมาเพื่อให้ระบบนำไปใช้ฝังเป็นลายน้ำและหัวรายงานอัตโนมัติ ---
+def save_uploaded_logo():
+    logo_filename = "image_627406.png"
+    if not os.path.exists(logo_filename):
+        pass
+    return logo_filename
+
+# --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
     if score >= 7: return 'สูงมาก (สีแดง)'
     elif score >= 5: return 'สูง (สีส้ม)'
@@ -86,6 +93,7 @@ def setup_pdf_font(pdf):
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
+# --- กำหนด Session State ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
@@ -99,6 +107,9 @@ if 'master_reviewers' not in st.session_state:
         {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
         {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
     ]
+
+if 'full_pdf_path' not in st.session_state:
+    st.session_state['full_pdf_path'] = None
 
 if 'capa_pdf_path' not in st.session_state:
     st.session_state['capa_pdf_path'] = None
@@ -125,22 +136,38 @@ def load_data():
 
 df = load_data()
 
+# Sidebar Filters & Controls
 st.sidebar.header("เครื่องมือสืบค้น")
+
 if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
     st.cache_data.clear()
+    st.session_state['full_pdf_path'] = None
     st.session_state['capa_pdf_path'] = None
     st.rerun()
 
 if not df.empty:
     available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
     selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
+
     quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
+
+    month_names = {
+        1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
+        5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม",
+        9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม"
+    }
+    available_months = sorted(df['Date'].dt.month.dropna().unique())
+    month_options = {month_names[int(m)]: m for m in available_months if int(m) in month_names}
+    selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
+    selected_months = [month_options[m] for m in selected_month_names]
+
     risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
     unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
 
     df_f = df.copy()
     if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
     if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
+    if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
     if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
     if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
 else:
@@ -155,6 +182,9 @@ def extract_cause_values(row, columns_list):
             if val and val != 'nan':
                 cause_text = val
                 break
+    if not cause_text or cause_text == 'nan':
+        if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan':
+            cause_text = str(row.iloc[20])
     return cause_text if cause_text and cause_text != 'nan' else '-'
 
 def extract_v_aa_values(row, columns_list):
@@ -167,245 +197,568 @@ def extract_v_aa_values(row, columns_list):
         elif col_str.startswith('AA.') or ' AA ' in col_str or col_str == 'AA':
             val = str(row.get(col, ''))
             if val and val != 'nan': aa_text = val
+    
+    if not v_text and not aa_text:
+        for idx_col, val_col in enumerate(row):
+            col_name = str(columns_list[idx_col])
+            if ('แก้ไข' in col_name or 'เบื้องต้น' in col_name) and 'เฉพาะหน้า' not in col_name and 'ผล' not in col_name:
+                if pd.notnull(val_col) and str(val_col) != 'nan':
+                    v_text = str(val_col)
+                    break
+
     solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
+if len(st.session_state['saved_capa_reports']) > 0:
+    for idx, report in enumerate(st.session_state['saved_capa_reports']):
+        with st.sidebar.expander(f"🔹 {idx+1}. {report['risk_name'][:25]}..."):
+            st.write(f"**ระดับ:** {report['risk_lvl']}")
+            st.write(f"**บันทึกเมื่อ:** {report['timestamp']}")
+else:
+    st.sidebar.info("ยังไม่มีประวัติการบันทึกทบทวนความเสี่ยง")
+
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# --- ส่วนแสดง Metrics และ ลูกบอลสีสรุปภาพรวม ---
 if not df_f.empty:
-    total_risks = len(df_f)
-    st.markdown("### 📊 ภาพรวมสถิติความเสี่ยง")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(label="📌 ความเสี่ยงทั้งหมด", value=f"{total_risks} เรื่อง")
-    with col2:
-        st.metric(label="🏢 แผนกที่เกิดสูงสุด", value=str(df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].mode()[0] if not df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].mode().empty else "-"))
-    with col3:
-        st.metric(label="⚠️ ประเภทสูงสุด", value=str(df_f['5.ประเภทความเสี่ยง'].mode()[0] if not df_f['5.ประเภทความเสี่ยง'].mode().empty else "-"))
-    with col4:
-        st.metric(label="📅 ปีงบประมาณ", value=str(selected_budget_years[0] if selected_budget_years else "ทุกปี"))
+    total_cases = len(df_f)
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    col_m1.metric("📊 อุบัติการณ์รวมทั้งหมด", f"{total_cases} เรื่อง")
+    
+    risk_cols_m = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+    if risk_cols_m:
+        m_temp = df_f.melt(value_vars=risk_cols_m, value_name='R_Det').dropna(subset=['R_Det'])
+        m_temp = m_temp[m_temp['R_Det'] != '']
+        col_m2.metric("📋 รายการความเสี่ยงย่อย", f"{len(m_temp)} รายการ")
+    else:
+        col_m2.metric("📋 รายการความเสี่ยงย่อย", "-")
+        
+    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
+    col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
-# --- คลาสสร้างรายงาน PDF พร้อมโลโก้หัวกระดาษและลายน้ำ ---
-class CAPAPDF(FPDF):
+class PDFTableReport(FPDF):
     def header(self):
         logo_path = "image_627406.png"
         if os.path.exists(logo_path):
             try:
-                # วางโลโก้จางๆ เป็นลายน้ำตรงกลางหน้ากระดาษ
-                self.image(logo_path, x=45, y=70, w=120, h=120)
+                self.image(logo_path, x=85, y=55, w=120, h=120)
             except:
                 pass
             try:
-                # วางโลโก้โรงพยาบาลไว้ที่มุมซ้ายบน (Header สากล)
-                self.image(logo_path, x=15, y=8, w=16)
+                self.image(logo_path, x=138, y=6, w=16)
             except:
                 pass
 
-def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None, fish_path=None, dept_df=None, budget_years=None):
-    pdf = CAPAPDF(orientation='P', unit='mm', format='A4')
+def generate_pdf_table(dataframe):
+    pdf = PDFTableReport(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
     font_name = setup_pdf_font(pdf)
-    
-    # ส่วนหัวกระดาษสากล (รองรับโลโก้ซ้าย และข้อมูลควบคุมเอกสารขวา)
-    pdf.set_xy(35, 10)
-    pdf.set_font(font_name, 'B', 14)
-    pdf.cell(120, 6, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์", ln=0, align='L')
-    
-    pdf.set_font(font_name, '', 9)
-    pdf.set_xy(150, 8)
-    pdf.cell(50, 4, txt=f"รหัสเอกสาร: CAPA-LAB-2569", ln=1, align='R')
-    pdf.set_xy(150, 13)
-    pdf.cell(50, 4, txt=f"วันที่พิมพ์: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
-    
-    pdf.set_xy(35, 16)
-    pdf.set_font(font_name, '', 10)
-    pdf.cell(120, 5, txt="กลุ่มงานเทคนิคการแพทย์ (Na Pho Hospital)", ln=True, align='L')
-    
-    pdf.ln(4)
-    pdf.set_font(font_name, 'B', 12)
-    pdf.cell(0, 6, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
+    pdf.set_font(font_name, size=12)
+
+    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report - รพ.นาโพธิ์", ln=True, align='C')
+    pdf.set_font(font_name, size=8)
+    pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(2)
 
-    budget_str = ", ".join(map(str, budget_years)) if budget_years else "ทุกปีงบประมาณ"
-    pdf.set_font(font_name, '', 9.5)
-    pdf.cell(0, 5, txt=f"รายการความเสี่ยง: {str(risk_name)} | ระดับความเสี่ยง: {str(risk_lvl)} | ปีงบประมาณ: {budget_str}", ln=True)
-    pdf.ln(2)
+    headers = [
+        "ลำดับ", "วันที่เกิด", "หน่วยงาน", "ช่วงเวร", "ความเสี่ยงที่เกิด", 
+        "LEVEL (T)", "สาเหตุเกิดจาก (U)", "การแก้ไขปัญหาเฉพาะหน้า",  
+        "การแก้ไขเบื้องต้น (V & AA)", "ผลการแก้ไข (W)", "ผลกระทบต่อคนไข้ (X)"
+    ]
+    col_widths = [9, 20, 22, 14, 30, 11, 28, 28, 28, 28, 38] 
 
-    if fig_path and os.path.exists(fig_path):
-        pdf.set_font(font_name, 'B', 9.5)
-        pdf.cell(0, 5, txt="กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ:", ln=True)
-        pdf.image(fig_path, x=25, w=160)
-        pdf.ln(2)
+    pdf.set_font(font_name, size=7)
+    pdf.set_fill_color(41, 128, 185)
+    pdf.set_text_color(255, 255, 255)
+    
+    header_height = 10  
+    x_start_hdr = pdf.get_x()
+    y_start_hdr = pdf.get_y()
+    
+    max_h_line = 3.2
+    for i, h in enumerate(headers):
+        x_curr = pdf.get_x()
+        y_curr = pdf.get_y()
+        pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
+        pdf.set_xy(x_curr, y_curr + 1.5)
+        pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
+        pdf.set_xy(x_curr + col_widths[i], y_curr)
+    
+    pdf.set_xy(x_start_hdr, y_start_hdr + header_height)
+    pdf.set_text_color(0, 0, 0)
+    line_height = 3.5 
 
-    if dept_df is not None and not dept_df.empty:
-        pdf.set_font(font_name, 'B', 9.5)
-        pdf.cell(0, 5, txt="สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้:", ln=True)
-        pdf.set_font(font_name, 'B', 9)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(110, 5, txt="หน่วยงาน/แผนก", border=1, fill=True)
-        pdf.cell(50, 5, txt="จำนวนครั้ง (เรื่อง)", border=1, fill=True, ln=True, align='C')
+    for idx, row in dataframe.iterrows():
+        date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
+        unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+        shift_val = str(row.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
         
-        pdf.set_font(font_name, '', 9)
-        for _, d_row in dept_df.iterrows():
-            pdf.cell(110, 5, txt=str(d_row['หน่วยงาน/แผนก']), border=1)
-            pdf.cell(50, 5, txt=str(d_row['จำนวนครั้ง (เรื่อง)']), border=1, ln=True, align='C')
-        pdf.ln(3)
+        risk_desc = '-'
+        for col in dataframe.columns:
+            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
+                risk_desc = str(row[col])
+                break
 
-    pdf.set_font(font_name, 'B', 10.5)
-    pdf.set_fill_color(230, 240, 250)
-    pdf.cell(0, 7, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
-    pdf.ln(2)
+        cause_val = extract_cause_values(row, dataframe.columns)
+        solve_val = extract_v_aa_values(row, dataframe.columns)
+        level_val = str(row.get('LEVEL', '-'))
+        
+        immediate_fix_val = '-'
+        for col in dataframe.columns:
+            if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
+                immediate_fix_val = str(row.get(col, '-'))
+                break
 
-    if fish_path and os.path.exists(fish_path):
-        pdf.image(fish_path, x=15, w=180)
-        pdf.ln(2)
+        result_val = str(row.get('ผลการแก้ไข', '-'))
+        impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
-    pdf.set_font(font_name, '', 9)
-    pdf.multi_cell(0, 4.5, txt=f"- บุคลากร (Man): {str(man)}\n- เครื่องมือ (Machine): {str(machine)}\n- วัสดุ/สารเคมี (Material): {str(material)}\n- กระบวนการ (Method): {str(method)}\n- สิ่งแวดล้อม (Environment): {str(env)}")
-    pdf.ln(2)
+        row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
 
-    pdf.set_font(font_name, 'B', 10.5)
-    pdf.set_fill_color(230, 240, 250)
-    pdf.cell(0, 7, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-    
-    pdf.set_font(font_name, '', 9.5)
-    pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
-    pdf.ln(4)
+        max_lines = 1
+        for i, text in enumerate(row_data):
+            w = col_widths[i]
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
+            chars_per_line = max(int(w / 1.7), 3)
+            lines = 0
+            for paragraph in str(txt_clean).split('\n'):
+                if len(paragraph) == 0: lines += 1
+                else: lines += max(1, -(-len(paragraph) // chars_per_line))
+            if lines > max_lines: max_lines = lines
 
-    # ลงนามคณะทำงาน
-    block_height_per_row = 45
-    estimated_signatures_height = ((len(reviewers) + 1) // 2) * block_height_per_row + 20
-    if pdf.get_y() + estimated_signatures_height > 275:
-        pdf.add_page()
+        row_height = max(6.0, (max_lines * line_height) + 2.5)
 
-    pdf.set_font(font_name, 'B', 10.5)
-    pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-    pdf.ln(4)
+        if pdf.get_y() + row_height > 195:
+            pdf.add_page()
+            pdf.set_font(font_name, size=7)
+            pdf.set_fill_color(41, 128, 185)
+            pdf.set_text_color(255, 255, 255)
+            x_start_hdr2 = pdf.get_x()
+            y_start_hdr2 = pdf.get_y()
+            for i, h in enumerate(headers):
+                x_curr = pdf.get_x()
+                y_curr = pdf.get_y()
+                pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
+                pdf.set_xy(x_curr, y_curr + 1.5)
+                pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
+                pdf.set_xy(x_curr + col_widths[i], y_curr)
+            pdf.set_xy(x_start_hdr2, y_start_hdr2 + header_height)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font(font_name, size=7)
 
-    if len(reviewers) > 0:
-        normal_reviewers = [r for r in reviewers if "ผู้อำนวยการ" not in str(r['position']) and "ผู้อนุมัติ" not in str(r['role'])]
-        director_reviewers = [r for r in reviewers if "ผู้อำนวยการ" in str(r['position']) or "ผู้อนุมัติ" in str(r['role'])]
+        is_even = (idx % 2 == 0)
+        pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
 
-        def draw_centered_signature_block(rev, x_pos, y_pos, col_width=90):
-            pdf.set_xy(x_pos, y_pos)
-            pdf.set_font(font_name, '', 9)
-            pdf.cell(col_width, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1, align='C')
-            
-            sig_y = pdf.get_y()
-            is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
-            if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
-                try:
-                    pdf.image(rev['sig_path'], x=x_pos + (col_width - 38) / 2, y=sig_y - 2, w=38, h=19)
-                except:
-                    pass
-            
-            pdf.set_xy(x_pos, sig_y + 14)
-            pdf.cell(col_width, 5, txt=f"ลงชื่อ: ...........................................", ln=1, align='C')
-            pdf.set_x(x_pos)
-            pdf.cell(col_width, 5, txt=f"({str(rev['name'])})", ln=1, align='C')
-            pdf.set_x(x_pos)
-            pdf.cell(col_width, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1, align='C')
-            pdf.set_x(x_pos)
-            pdf.cell(col_width, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1, align='C')
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        alignments = ['C', 'C', 'L', 'C', 'L', 'C', 'L', 'L', 'L', 'L', 'L']
 
-        i = 0
-        while i < len(normal_reviewers):
-            if pdf.get_y() + block_height_per_row > 280:
-                pdf.add_page()
-            y_start = pdf.get_y()
-            draw_centered_signature_block(normal_reviewers[i], 15, y_start, col_width=85)
-            if i + 1 < len(normal_reviewers):
-                draw_centered_signature_block(normal_reviewers[i+1], 110, y_start, col_width=85)
-            pdf.set_y(y_start + block_height_per_row)
-            i += 2
+        for i, text in enumerate(row_data):
+            x_current = pdf.get_x()
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
+            pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
+            pdf.set_xy(x_current, y_start + 1.0)
+            pdf.multi_cell(col_widths[i], line_height, txt=str(txt_clean), border=0, align=alignments[i])
+            pdf.set_xy(x_current + col_widths[i], y_start)
 
-        for rev in director_reviewers:
-            if pdf.get_y() + block_height_per_row > 280:
-                pdf.add_page()
-            y_start = pdf.get_y() + 2
-            draw_centered_signature_block(rev, 60, y_start, col_width=90)
-            pdf.set_y(y_start + block_height_per_row)
+        pdf.set_xy(x_start, y_start + row_height)
 
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_file.name)
     return tmp_file.name
 
-# --- ฟอร์มกรอกข้อมูลและเลือกรายการความเสี่ยงใน Streamlit ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("ออกรายงานภาพรวม")
+if st.sidebar.button("⚙️ ประมวลผลสร้างรายงานตาราง PDF"):
+    try:
+        pdf_path = generate_pdf_table(df_f)
+        st.session_state['full_pdf_path'] = pdf_path
+        st.sidebar.success("สร้างไฟล์ PDF สำเร็จแล้ว!")
+    except Exception as e:
+        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
+
+if st.session_state['full_pdf_path'] and os.path.exists(st.session_state['full_pdf_path']):
+    with open(st.session_state['full_pdf_path'], "rb") as f:
+        st.sidebar.download_button(
+            label="📥 คลิกดาวน์โหลดรายงานตาราง PDF",
+            data=f,
+            file_name="Risk_Full_Report.pdf",
+            mime="application/pdf",
+            key="dl_full_pdf"
+        )
+
+st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
+matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
+
+if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
+    def get_clean_unit_category(row):
+        risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
+        if 'คลินิก' in risk_type:
+            if matched_event_cols:
+                ev_val = str(row.get(matched_event_cols[0], '')).strip()
+                if 'Miss' in ev_val and 'Near' not in ev_val: return 'Miss (ทางคลินิก)'
+                elif 'Near Miss' in ev_val: return 'Near Miss (ทางคลินิก)'
+            return None 
+        else: return 'ความเสี่ยงทั่วไป'
+
+    df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
+    clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
+    bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
+    
+    color_map = {'Miss (ทางคลินิก)': '#1f77b4', 'Near Miss (ทางคลินิก)': '#aec7e8', 'ความเสี่ยงทั่วไป': '#2ca02c'}
+    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
+    fig_bar.update_traces(textangle=0, textposition='inside')
+    fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(tickangle=-30, type='category'))
+    st.plotly_chart(fig_bar, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
+
+st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
+if not df_f.empty and 'Clean_Group' in df_f.columns:
+    stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
+    stats_df['รวม'] = stats_df.sum(axis=1)
+    for col in stats_df.columns:
+        if col != 'รวม': stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
+    st.dataframe(stats_df, use_container_width=True)
+else:
+    st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
+
+risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
+if not df_f.empty and risk_cols:
+    melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
+    melted_all = melted_all[melted_all['Risk_Detail'] != '']
+else:
+    melted_all = pd.DataFrame()
+
 st.markdown("---")
-st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและออกรายงาน CAPA PDF")
-if not df_f.empty:
-    risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
-    if risk_cols:
-        melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-        unique_risks = sorted(melted_all['Risk_Detail'].unique())
-        selected_risk_item = st.selectbox("🎯 เลือกรายการความเสี่ยงที่ต้องการทบทวน:", unique_risks)
+st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
+
+if not melted_all.empty:
+    matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
+    
+    def get_sev_from_row(risk_name):
+        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
+        if not sev_col: return 'A'
+        matches = df_f[df_f.isin([risk_name]).any(axis=1)]
+        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
+
+    matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
+    matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
+    matrix_df['Sev_Score'] = matrix_df['Sev_Raw'].apply(get_sev_score)
+    matrix_df['Risk_Matrix'] = matrix_df['Freq_Score'] * matrix_df['Sev_Score']
+    matrix_df['Risk_Level'] = matrix_df['Risk_Matrix'].apply(get_risk_level)
+    matrix_df = matrix_df.sort_values(by='Risk_Matrix', ascending=False)
+
+    color_emoji = {'สูงมาก (สีแดง)': '🔴 สูงมาก', 'สูง (สีส้ม)': '🟠 สูง', 'ปานกลาง (สีเหลือง)': '🟡 ปานกลาง', 'ต่ำ (สีเขียว)': '🟢 ต่ำ'}
+    display_df = matrix_df.copy()
+    display_df['ระดับความเสี่ยง'] = display_df['Risk_Level'].map(color_emoji)
+
+    st.dataframe(display_df[['Risk_Detail', 'Frequency', 'Freq_Score', 'Sev_Score', 'Risk_Matrix', 'ระดับความเสี่ยง']].rename(columns={
+        'Risk_Detail': 'รายการความเสี่ยงย่อย',
+        'Frequency': 'ความถี่',
+        'Freq_Score': 'คะแนนความถี่',
+        'Sev_Score': 'คะแนนความรุนแรง',
+        'Risk_Matrix': 'คะแนนรวม Matrix'
+    }), use_container_width=True)
+
+    st.subheader("🗺️ แผนภูมิ Risk Matrix (แสดงชื่อความเสี่ยงย่อย)")
+    matrix_df['x_jitter'] = matrix_df['Freq_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+    matrix_df['y_jitter'] = matrix_df['Sev_Score'] + np.random.uniform(-0.05, 0.05, len(matrix_df))
+
+    fig_matrix = px.scatter(
+        matrix_df, x='x_jitter', y='y_jitter', size='Frequency', color='Risk_Matrix',
+        color_continuous_scale=[[0.0, "#008000"], [0.3, "#FFFF00"], [0.6, "#FFA500"], [1.0, "#FF0000"]],
+        hover_name='Risk_Detail', range_x=[0.5, 4.5], range_y=[0.5, 4.5],
+        labels={'x_jitter': 'คะแนนความถี่ (Frequency Score)', 'y_jitter': 'คะแนนความรุนแรง (Severity Score)'}
+    )
+    fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+st.markdown("---")
+st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
+
+if not melted_all.empty:
+    unique_risks = sorted(melted_all['Risk_Detail'].unique())
+    selected_risk_item = st.selectbox("🎯 เลือกรายการความเสี่ยงที่ต้องการเจาะลึกเพื่อทบทวน:", unique_risks)
+
+    if selected_risk_item:
+        risk_subset = melted_all[melted_all['Risk_Detail'] == selected_risk_item].copy()
         
-        # กรองข้อมูลเฉพาะรายการที่เลือกเพื่อดึงแผนกและคำนวณลูกบอลสี
-        sub_df = melted_all[melted_all['Risk_Detail'] == selected_risk_item]
-        count_item = len(sub_df)
-        freq_s = get_freq_score(count_item)
-        sev_s = get_sev_score(selected_risk_item)
-        risk_score = freq_s * sev_s
-        risk_lvl_str = get_risk_level(risk_score)
+        def get_budget_month_order(date):
+            if pd.isnull(date): return 0
+            m = date.month
+            return m - 9 if m >= 10 else m + 3
 
-        # แสดงลูกบอลสีและระดับความเสี่ยงตามเกณฑ์
-        color_badge = "🟢 สีเขียว"
-        if "แดง" in risk_lvl_str: color_badge = "🔴 สีแดง"
-        elif "ส้ม" in risk_lvl_str: color_badge = "🟠 สีส้ม"
-        elif "เหลือง" in risk_lvl_str: color_badge = "🟡 สีเหลือง"
-
-        st.info(f"📌 **สรุปการประเมิน:** จำนวนครั้งทั้งหมด **{count_item}** เรื่อง | ระดับความเสี่ยง: **{risk_lvl_str}** ({color_badge})")
-
-        fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า")
-        fish_machine = st.text_area("⚙️ เครื่องมือ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ")
-        fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพ")
-        fish_method = st.text_area("📋 กระบวนการ (Method):", "ขั้นตอนทบทวนก่อนอนุมัติผล")
-        fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "ความแออัดหน้างาน")
+        risk_subset['Budget_Month_Index'] = risk_subset['Date'].apply(get_budget_month_order)
+        thai_budget_months = {1: "ต.ค.", 2: "พ.ย.", 3: "ธ.ค.", 4: "ม.ค.", 5: "ก.พ.", 6: "มี.ค.", 7: "เม.ย.", 8: "พ.ค.", 9: "มิ.ย.", 10: "ก.ค.", 11: "ส.ค.", 12: "ก.ย."}
+        risk_subset['Month_Label'] = risk_subset['Budget_Month_Index'].map(thai_budget_months)
         
-        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า:", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา")
-        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว:", "กำหนดระบบทบทวนซ้ำและปรับปรุง SOP")
+        actual_trend = risk_subset.groupby(['Thai_Budget_Year', 'Budget_Month_Index', 'Month_Label']).size().reset_index(name='Count')
+        budget_years_in_subset = sorted(risk_subset['Thai_Budget_Year'].dropna().unique())
+        full_grid = [{'Thai_Budget_Year': int(b), 'Budget_Month_Index': m, 'Month_Label': thai_budget_months[m]} for b in budget_years_in_subset for m in range(1, 13)]
+        
+        grid_df = pd.DataFrame(full_grid)
+        merged_trend = pd.merge(grid_df, actual_trend, on=['Thai_Budget_Year', 'Budget_Month_Index', 'Month_Label'], how='left').fillna({'Count': 0})
+        merged_trend = merged_trend.sort_values(['Thai_Budget_Year', 'Budget_Month_Index'])
+        merged_trend['Year_Label_Str'] = "ปีงบ " + merged_trend['Thai_Budget_Year'].astype(str)
+        
+        st.markdown(f"**กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ: `{selected_risk_item}`**")
+        fig_line = px.line(merged_trend, x='Month_Label', y='Count', color='Year_Label_Str', markers=True, text='Count')
+        st.plotly_chart(fig_line, use_container_width=True)
 
-        if st.button("📄 ประมวลผลสร้างรายงาน CAPA PDF รูปแบบสากล"):
+        st.markdown(f"##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้ (ปีงบประมาณ: {', '.join(map(str, budget_years_in_subset)) if budget_years_in_subset else '-'})")
+        unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
+        dept_summary = pd.DataFrame()
+        if unit_col_name in risk_subset.columns:
+            dept_summary = risk_subset[unit_col_name].value_counts().reset_index()
+            dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
+            st.dataframe(dept_summary, use_container_width=True, hide_index=True)
+        else:
+            st.info("ไม่พบข้อมูลคอลัมน์หน่วยงานในชุดข้อมูลนี้")
+
+        st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
+        detail_view_df = risk_subset.copy()
+        if 'Date' in detail_view_df.columns:
+            detail_view_df = detail_view_df.sort_values(by='Date', ascending=False)
+        
+        table_rows = []
+        for _, r in detail_view_df.iterrows():
+            d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
+            u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+            shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
+            cause_text = extract_cause_values(r, detail_view_df.columns)
+            solve_text = extract_v_aa_values(r, detail_view_df.columns)
+            
+            imm_fix = '-'
+            for col in detail_view_df.columns:
+                if 'การแก้ไขปัญหาเฉพาะหน้า' in str(col) or 'เฉพาะหน้า' in str(col):
+                    imm_fix = str(r.get(col, '-'))
+                    break
+            
+            res_val = str(r.get('ผลการแก้ไข', '-'))
+            imp_val = str(r.get('ผลกระทบต่อคนไข้', '-'))
+            
+            table_rows.append({
+                'วันที่เกิด': d_str,
+                'หน่วยงาน': u_name,
+                'ช่วงเวร': shift,
+                'สาเหตุเกิดจาก (U)': cause_text,
+                'การแก้ไขเบื้องต้น (V & AA)': solve_text,
+                'การแก้ไขปัญหาเฉพาะหน้า': imm_fix,
+                'ผลการแก้ไข': res_val,
+                'ผลกระทบกับคนไข้': imp_val
+            })
+            
+        sub_df_display = pd.DataFrame(table_rows)
+        if not sub_df_display.empty:
+            html_table = sub_df_display.to_html(classes='table-custom', index=False, escape=False)
+            custom_css = """
+            <style>
+            .table-custom { width: 100% !important; border-collapse: collapse; font-family: 'Sarabun', 'Tahoma', sans-serif; font-size: 14px; }
+            .table-custom th, .table-custom td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; word-break: break-word; white-space: normal; }
+            .table-custom th { background-color: #f8f9fa; font-weight: bold; text-align: center; }
+            .table-container { max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 20px; }
+            </style>
+            """
+            st.markdown(f'<div class="table-container">{custom_css}{html_table}</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("##### 🔍 วิเคราะห์สาเหตุ (ก้างปลา 5M1E) และจัดทำมาตรการ CAPA")
+        
+        col_rev1, col_rev2 = st.columns(2)
+        with col_rev1:
+            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="fish_man_k")
+            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="fish_mac_k")
+            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="fish_mat_k")
+        with col_rev2:
+            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="fish_met_k")
+            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="fish_env_k")
+            
+        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_k")
+        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_k")
+
+        st.markdown("---")
+        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
+        st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำ:")
+
+        selected_reviewers_for_report = []
+        for idx, rev in enumerate(st.session_state['master_reviewers']):
+            col_chk, col_up = st.columns([3, 2])
+            with col_chk:
+                is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
+            with col_up:
+                if "ผู้อำนวยการ" not in rev['position'] and "ผู้อนุมัติ" not in rev['role']:
+                    if rev['sig_path'] and os.path.exists(rev['sig_path']):
+                        st.success("✔️ มีลายเซ็นในระบบแล้ว")
+                    
+                    sig_upload = st.file_uploader(f"อัปโหลด/เปลี่ยนลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
+                    if sig_upload is not None:
+                        tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                        tmp_s.write(sig_upload.read())
+                        tmp_s.close()
+                        st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+                else:
+                    st.info("ตำแหน่งนี้จะเว้นช่องลายเซ็นไว้ตามเงื่อนไข")
+
+            if is_selected:
+                selected_reviewers_for_report.append(st.session_state['master_reviewers'][idx])
+            st.markdown("---")
+
+        current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
+        risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
+
+        # สร้างรูปกราฟเส้นแนวโน้ม
+        temp_fig_path = None
+        try:
+            fig_bytes = fig_line.to_image(format="png", width=800, height=350, scale=2)
+            tmp_f = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tmp_f.write(fig_bytes)
+            tmp_f.close()
+            temp_fig_path = tmp_f.name
+        except Exception as e:
+            temp_fig_path = None
+
+        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib
+        def generate_fishbone_diagram(man, machine, material, method, env):
+            plt.figure(figsize=(10, 4.5), dpi=300)
+            ax = plt.subplot(111)
+            ax.set_xlim(0, 100)
+            ax.set_ylim(0, 65)
+            ax.axis('off')
+
+            plt.plot([10, 85], [32, 32], color='navy', lw=3)
+            head_x = [85, 95, 95, 85]
+            head_y = [22, 27, 37, 42]
+            plt.fill(head_x, head_y, color='#e6f0fa', edgecolor='navy', lw=2)
+            plt.text(90, 32, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy', fontname='Sarabun')
+
+            plt.plot([25, 20], [32, 54], color='black', lw=1.5)
+            plt.text(19, 56, f"Man (บุคลากร):\n{str(man)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            
+            plt.plot([47, 42], [32, 54], color='black', lw=1.5)
+            plt.text(41, 56, f"Machine (เครื่องมือ):\n{str(machine)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            
+            plt.plot([69, 64], [32, 54], color='black', lw=1.5)
+            plt.text(63, 56, f"Material (วัสดุ/สารเคมี):\n{str(material)[:50]}...", fontsize=7.5, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+
+            plt.plot([36, 31], [32, 10], color='black', lw=1.5)
+            plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:50]}...", fontsize=7.5, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            
+            plt.plot([58, 53], [32, 10], color='black', lw=1.5)
+            plt.text(52, 8, f"Environment (สิ่งแวดล้อม):\n{str(env)[:50]}...", fontsize=7.5, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+
+            tmp_fish = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            plt.savefig(tmp_fish.name, bbox_inches='tight', dpi=300)
+            plt.close()
+            return tmp_fish.name
+
+        temp_fish_path = generate_fishbone_diagram(fish_man, fish_machine, fish_material, fish_method, fish_env)
+
+        # ฟังก์ชันสร้างรายงาน PDF แบบเจาะลึก (CAPA Report)
+        class PDFCAPAReport(FPDF):
+            def header(self):
+                logo_path = "image_627406.png"
+                if os.path.exists(logo_path):
+                    try:
+                        self.image(logo_path, x=75, y=40, w=140, h=140)
+                    except:
+                        pass
+                    try:
+                        self.image(logo_path, x=10, y=8, w=14)
+                    except:
+                        pass
+
+        def generate_capa_pdf():
+            pdf = PDFCAPAReport(orientation='P', unit='mm', format='A4')
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+            
+            font_name = setup_pdf_font(pdf)
+            pdf.set_font(font_name, 'B', 14)
+            pdf.cell(0, 8, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกัน (CAPA Report)", ln=True, align='C')
+            pdf.set_font(font_name, '', 10)
+            pdf.cell(0, 6, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์", ln=True, align='C')
+            pdf.ln(4)
+
+            # ข้อมูลทั่วไป
+            pdf.set_font(font_name, 'B', 11)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 7, txt=" 1. ข้อมูลอุบัติการณ์และความเสี่ยง", ln=True, fill=True)
+            pdf.set_font(font_name, '', 10)
+            pdf.cell(0, 6, txt=f"- รายการความเสี่ยงย่อย: {selected_risk_item}", ln=True)
+            pdf.cell(0, 6, txt=f"- ระดับความเสี่ยง (Risk Level): {risk_lvl_val}", ln=True)
+            pdf.cell(0, 6, txt=f"- จำนวนอุบัติการณ์ที่เกี่ยวข้อง: {len(risk_subset)} ครั้ง", ln=True)
+            pdf.ln(3)
+
+            # กราฟแนวโน้ม
+            if temp_fig_path and os.path.exists(temp_fig_path):
+                pdf.set_font(font_name, 'B', 11)
+                pdf.set_fill_color(230, 240, 250)
+                pdf.cell(0, 7, txt=" 2. กราฟแสดงแนวโน้มอุบัติการณ์รายเดือน", ln=True, fill=True)
+                pdf.ln(2)
+                pdf.image(temp_fig_path, x=15, w=180)
+                pdf.ln(5)
+
+            # แผนภูมิก้างปลา
+            if temp_fish_path and os.path.exists(temp_fish_path):
+                pdf.set_font(font_name, 'B', 11)
+                pdf.set_fill_color(230, 240, 250)
+                pdf.cell(0, 7, txt=" 3. การวิเคราะห์สาเหตุ (Fishbone Diagram - 5M1E)", ln=True, fill=True)
+                pdf.ln(2)
+                pdf.image(temp_fish_path, x=15, w=180)
+                pdf.ln(5)
+
+            # มาตรการ CAPA
+            pdf.set_font(font_name, 'B', 11)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 7, txt=" 4. มาตรการแก้ไขและป้องกัน (Corrective & Preventive Action)", ln=True, fill=True)
+            pdf.set_font(font_name, '', 10)
+            pdf.multi_cell(0, 6, txt=f"มาตรการแก้ไขปัญหาเฉพาะหน้า (Corrective Action):\n{corrective_action}")
+            pdf.ln(2)
+            pdf.multi_cell(0, 6, txt=f"มาตรการป้องกันระยะยาว (Preventive Action):\n{preventive_action}")
+            pdf.ln(4)
+
+            # คณะทำงานและลายเซ็น
+            pdf.set_font(font_name, 'B', 11)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 7, txt=" 5. คณะทำงานผู้ทบทวนและผู้อนุมัติ", ln=True, fill=True)
+            pdf.ln(3)
+
+            pdf.set_font(font_name, '', 10)
+            for rev in selected_reviewers_for_report:
+                pdf.cell(90, 6, txt=f"ลงชื่อ: .............................................................. ({rev['name']})", ln=0)
+                pdf.cell(0, 6, txt=f"ตำแหน่ง: {rev['position']}", ln=1)
+                pdf.cell(90, 5, txt=f"        ({rev['role']})", ln=1)
+                pdf.ln(3)
+
+            tmp_capa_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            pdf.output(tmp_capa_file.name)
+            return tmp_capa_file.name
+
+        if st.button("🚀 สร้างรายงาน PDF CAPA เจาะลึก"):
             try:
-                # สร้างกราฟฟิกจำลองสำหรับใส่ในรายงาน
-                fig_dummy, ax = plt.subplots(figsize=(6, 2.5))
-                ax.plot([1, 2, 3], [4, 2, 5], marker='o', color='#2980b9')
-                ax.set_title("Trend Analysis")
-                tmp_fig = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                plt.savefig(tmp_fig.name, bbox_inches='tight', dpi=200)
-                plt.close()
-
-                # สร้างแผนภูมิก้างปลาจำลอง
-                tmp_fish = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                plt.figure(figsize=(6, 2))
-                plt.text(0.5, 0.5, "Fishbone 5M1E Summary Diagram", ha='center', va='center', fontsize=12)
-                plt.axis('off')
-                plt.savefig(tmp_fish.name, bbox_inches='tight', dpi=200)
-                plt.close()
-
-                # สรุปตารางแยกตามแผนกสำหรับรายการนี้
-                dept_summary = sub_df.groupby('4.หน่วยงานที่ทำให้เกิดความเสี่ยง').size().reset_index(name='จำนวนครั้ง (เรื่อง)')
-                dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
-
-                capa_pdf_path = generate_capa_pdf_with_master_list(
-                    selected_risk_item, risk_lvl_str, 
-                    fish_man, fish_machine, fish_material, fish_method, fish_env, 
-                    corrective_action, preventive_action, 
-                    st.session_state['master_reviewers'], tmp_fig.name, tmp_fish.name, dept_summary, selected_budget_years
-                )
+                capa_pdf_result_path = generate_capa_pdf()
                 st.session_state['capa_pdf_path'] = capa_pdf_path
-                st.success("สร้างรายงาน CAPA PDF รูปแบบสากลสำเร็จแล้ว!")
+                
+                # บันทึกลงประวัติ session_state
+                st.session_state['saved_capa_reports'].append({
+                    'risk_name': selected_risk_item,
+                    'risk_lvl': risk_lvl_val,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'pdf_path': capa_pdf_result_path
+                })
+                st.success("สร้างรายงาน CAPA PDF สำเร็จแล้ว!")
             except Exception as e:
-                st.error(f"เกิดข้อผิดพลาด: {e}")
+                st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 
         if st.session_state['capa_pdf_path'] and os.path.exists(st.session_state['capa_pdf_path']):
-            with open(st.session_state['capa_pdf_path'], "rb") as pdf_file:
+            with open(st.session_state['capa_pdf_path'], "rb") as f_capa:
                 st.download_button(
-                    label="📥 คลิกดาวน์โหลดรายงาน CAPA PDF",
-                    data=pdf_file,
-                    file_name=f"CAPA_Report_Standard.pdf",
-                    mime="application/pdf"
+                    label="📥 คลิกดาวน์โหลดรายงาน PDF CAPA เจาะลึก",
+                    data=f_capa,
+                    file_name=f"CAPA_Report_{selected_risk_item[:15]}.pdf",
+                    mime="application/pdf",
+                    key="dl_capa_pdf"
                 )
