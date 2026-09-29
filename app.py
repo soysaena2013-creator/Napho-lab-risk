@@ -44,16 +44,16 @@ st.set_page_config(layout="wide")
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
-# --- รายชื่อคณะทำงานกลาง (Master List) ดึงรูปลายเซ็นอัตโนมัติจากโฟลเดอร์ signatures/ ---
+# --- รายชื่อคณะทำงานกลาง (Master List) แนะนำให้ตั้งชื่อไฟล์ภาพในโฟลเดอร์ signatures/ เป็นภาษาอังกฤษ ---
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/ทนพ.ศราวุธ สร้อยเสนา.png"},
-        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/ทนพญ.ปรีดา ชาไข.png"},
-        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/ทนพญ.รุ่งนภา สอนจันทร์.png"},
-        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/นางสาวลลิดา แก้วบุดศา.png"},
-        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/นางสาวประณีต มิ่งไธสง.png"},
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/ทนพ.ศราวุธ สร้อยเสนา.png"},
-        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": "signatures/นพ.เวฬุวัน อินทอง.png"},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/sarawut.png"},
+        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/preeda.png"},
+        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/rungnapa.png"},
+        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/lalida.png"},
+        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/praneet.png"},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/sarawut.png"},
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": "signatures/veluwan.png"},
     ]
 
 # 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
@@ -513,7 +513,7 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (ดึงลายเซ็นจากโฟลเดอร์อัตโนมัติ) ---
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวน (ดึงรูปลายเซ็นจากโฟลเดอร์อัตโนมัติ)")
         st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
@@ -527,7 +527,7 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก (แก้ปัญหาฟอนต์ภาษาไทย) ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -584,7 +584,7 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล (บังคับใช้ฟอนต์ Sarabun เพื่อรองรับภาษาไทย) ---
+            # --- ส่วนลงนามดิจิทัล (ป้องกัน Error พาธไฟล์ภาษาไทยด้วย try-except) ---
             pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
@@ -601,11 +601,14 @@ if not melted_all.empty:
                     pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
                     pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
-                    if rev['sig_path'] and os.path.exists(rev['sig_path']):
+                    # ตรวจสอบและแทรกรูปลายเซ็นโดยปลอดภัย
+                    sig_file = rev.get('sig_path')
+                    if sig_file:
                         try:
-                            pdf.image(rev['sig_path'], x=20, y=pdf.get_y(), h=12)
-                        except:
-                            pass
+                            if os.path.exists(sig_file):
+                                pdf.image(sig_file, x=20, y=pdf.get_y(), h=12)
+                        except Exception:
+                            pass # ข้ามหากไฟล์มีปัญหาเพื่อป้องกันแครช
                     
                     pdf.cell(90, 14, txt=f"ลงชื่อ: ........................................................", ln=1)
                     pdf.cell(90, 5, txt=f"({rev['name']})", ln=0)
@@ -662,7 +665,7 @@ if not melted_all.empty:
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
                         mime="application/pdf"
                     )
-                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อและรูปลายเซ็นจากโฟลเดอร์มาลงนามให้อัตโนมัติเรียบร้อยครับ")
+                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อและรูปลายเซ็นมาลงนามให้อัตโนมัติเรียบร้อยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
