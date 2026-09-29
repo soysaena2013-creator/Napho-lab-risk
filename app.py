@@ -656,17 +656,18 @@ if not melted_all.empty:
                     # บรรทัดที่ 1: บทบาท
                     pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
                     
-                    # บรรทัดที่ 2: ลายเซ็น
+                    # บรรทัดที่ 2: ลายเซ็น (ขยายขนาดใหญ่ขึ้นและปรับความสูงช่องรองรับ)
                     sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            pdf.image(rev['sig_path'], x=x_pos + 15, y=sig_y, h=10)
+                            # ขยายความสูง (h) เป็น 25 มม. และเพิ่มความเข้มของภาพ (filter/alpha ถ้าทำได้ หรือแสดงผลด้วยขนาดใหญ่เต็มช่อง)
+                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 2, h=25)
                         except:
                             pass
                     
                     pdf.set_xy(x_pos, sig_y)
-                    pdf.cell(90, 12, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    pdf.cell(90, 22, txt=f"ลงชื่อ: ........................................................", ln=1)
                     
                     # บรรทัดที่ 3: ชื่อ-สกุล
                     pdf.set_x(x_pos)
@@ -682,7 +683,7 @@ if not melted_all.empty:
 
                 i = 0
                 while i < len(normal_reviewers):
-                    if pdf.get_y() > 240:
+                    if pdf.get_y() > 220:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
@@ -690,19 +691,19 @@ if not melted_all.empty:
                     
                     if i + 1 < len(normal_reviewers):
                         draw_signature_block(normal_reviewers[i+1], 110, y_start)
-                        pdf.set_y(y_start + 32)
+                        pdf.set_y(y_start + 42)
                     else:
-                        pdf.set_y(y_start + 32)
+                        pdf.set_y(y_start + 42)
                     
                     i += 2
 
                 for rev in director_reviewers:
-                    if pdf.get_y() > 235:
+                    if pdf.get_y() > 220:
                         pdf.add_page()
                     
                     y_start = pdf.get_y() + 4
                     draw_signature_block(rev, 60, y_start)
-                    pdf.set_y(y_start + 32)
+                    pdf.set_y(y_start + 42)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
