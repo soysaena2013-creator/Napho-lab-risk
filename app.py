@@ -5,10 +5,28 @@ import numpy as np
 import io
 import requests
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 from fpdf import FPDF
 import tempfile
 import os
 from datetime import datetime
+
+# --- ตั้งค่าฟอนต์ภาษาไทยสำหรับ Matplotlib ---
+def setup_matplotlib_font():
+    font_path = "Sarabun-Regular.ttf"
+    if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
+        try:
+            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf", timeout=5)
+            if r.status_code == 200 and len(r.content) > 1000:
+                with open(font_path, "wb") as f:
+                    f.write(r.content)
+        except:
+            pass
+    if os.path.exists(font_path):
+        fm.fontManager.addfont(font_path)
+        plt.rcParams['font.family'] = 'Sarabun'
+
+setup_matplotlib_font()
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -473,7 +491,7 @@ if not melted_all.empty:
         fig_line = px.line(merged_trend, x='Month_Label', y='Count', color='Year_Label_Str', markers=True, text='Count')
         st.plotly_chart(fig_line, use_container_width=True)
 
-        st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้")
+        st.markdown(f"##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้ (ปีงบประมาณ: {', '.join(map(str, budget_years_in_subset)) if budget_years_in_subset else '-'})")
         unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
         dept_summary = pd.DataFrame()
         if unit_col_name in risk_subset.columns:
@@ -585,7 +603,7 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib
+        # สร้างรูปภาพแผนภูมิก้างปลา 5M1E ด้วย Matplotlib (ใช้ฟอนต์ Sarabun)
         def generate_fishbone_diagram(man, machine, material, method, env):
             plt.figure(figsize=(10, 5), dpi=300)
             ax = plt.subplot(111)
@@ -599,31 +617,26 @@ if not melted_all.empty:
             head_x = [85, 95, 95, 85]
             head_y = [20, 25, 35, 40]
             plt.fill(head_x, head_y, color='#e6f0fa', edgecolor='navy', lw=2)
-            plt.text(90, 30, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy')
+            plt.text(90, 30, "Root\nCause", fontsize=9, fontweight='bold', ha='center', va='center', color='navy', fontname='Sarabun')
 
             # กิ่งก้านด้านบน (Man, Machine, Material)
-            # Man (ซ้ายบน)
             plt.plot([25, 20], [30, 50], color='black', lw=1.5)
-            plt.text(19, 52, f"Man (บุคลากร):\n{str(man)[:60]}...", fontsize=8, ha='left', va='bottom', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.text(19, 52, f"Man (บุคลากร):\n{str(man)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            # Machine (กลางบน)
             plt.plot([47, 42], [30, 50], color='black', lw=1.5)
-            plt.text(41, 52, f"Machine (เครื่องมือ):\n{str(machine)[:60]}...", fontsize=8, ha='left', va='bottom', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.text(41, 52, f"Machine (เครื่องมือ):\n{str(machine)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            # Material (ขวาบน)
             plt.plot([69, 64], [30, 50], color='black', lw=1.5)
-            plt.text(63, 52, f"Material (วัสดุ/สารเคมี):\n{str(material)[:60]}...", fontsize=8, ha='left', va='bottom', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.text(63, 52, f"Material (วัสดุ/สารเคมี):\n{str(material)[:60]}...", fontsize=8, ha='left', va='bottom', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
 
             # กิ่งก้านด้านล่าง (Method, Environment)
-            # Method (ซ้ายล่าง)
             plt.plot([36, 31], [30, 10], color='black', lw=1.5)
-            plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:60]}...", fontsize=8, ha='left', va='top', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.text(30, 8, f"Method (กระบวนการ):\n{str(method)[:60]}...", fontsize=8, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
             
-            # Environment (ขวาล่าง)
             plt.plot([58, 53], [30, 10], color='black', lw=1.5)
-            plt.text(52, 8, f"Environment (สิ่งแวดล้อม):\n{str(env)[:60]}...", fontsize=8, ha='left', va='top', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
+            plt.text(52, 8, f"Environment (สิ่งแวดล้อม):\n{str(env)[:60]}...", fontsize=8, ha='left', va='top', fontname='Sarabun', bbox=dict(boxstyle='round,pad=0.3', facecolor='#fff', edgecolor='#ccc'))
 
-            plt.title("Fishbone Diagram (5M1E Root Cause Analysis)", fontsize=11, fontweight='bold', pad=5)
+            plt.title("Fishbone Diagram (5M1E Root Cause Analysis)", fontsize=11, fontweight='bold', pad=5, fontname='Sarabun')
             
             tmp_fish = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
             plt.savefig(tmp_fish.name, bbox_inches='tight', dpi=300)
@@ -632,15 +645,14 @@ if not melted_all.empty:
 
         temp_fishbone_path = generate_fishbone_diagram(fish_man, fish_machine, fish_material, fish_method, fish_env)
 
-        def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None, fish_path=None, dept_df=None, raw_df=None):
+        def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None, fish_path=None, dept_df=None, budget_years=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
             
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            pdf.set_font(font_name, size=14)
-
+            # 1. โลโก้โรงพยาบาลนาโพธิ์ที่หัวกระดาษ
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
                 logo_resp = requests.get(logo_url, timeout=3)
@@ -648,73 +660,78 @@ if not melted_all.empty:
                     tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                     tmp_logo.write(logo_resp.content)
                     tmp_logo.close()
-                    pdf.image(tmp_logo.name, x=94, y=10, w=22)
-                    pdf.ln(18)
+                    pdf.image(tmp_logo.name, x=94, y=8, w=20)
+                    pdf.ln(16)
                 else:
-                    pdf.ln(5)
+                    pdf.ln(4)
             except:
-                pdf.ln(5)
+                pdf.ln(4)
 
-            pdf.set_font(font_name, 'B', 14)
-            pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
+            pdf.set_font(font_name, 'B', 13)
+            pdf.cell(0, 6, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
             
-            pdf.set_font(font_name, '', 11)
-            pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์", ln=True, align='C')
+            pdf.set_font(font_name, '', 10)
+            pdf.cell(0, 5, txt="กลุ่มงานเทคนิคการแพทย์", ln=True, align='C')
             pdf.ln(2)
             
-            pdf.set_font(font_name, 'B', 12)
-            pdf.cell(0, 7, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
-            pdf.ln(3)
+            pdf.set_font(font_name, 'B', 11)
+            pdf.cell(0, 6, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
+            pdf.ln(2)
 
-            pdf.set_font(font_name, '', 10)
-            pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {str(risk_name)} | ระดับความเสี่ยง: {str(risk_lvl)}", ln=True)
-            pdf.ln(3)
+            budget_str = ", ".join(map(str, budget_years)) if budget_years else "ทุกปีงบประมาณ"
+            pdf.set_font(font_name, '', 9.5)
+            pdf.cell(0, 5, txt=f"รายการความเสี่ยง: {str(risk_name)} | ระดับความเสี่ยง: {str(risk_lvl)} | ปีงบประมาณ: {budget_str}", ln=True)
+            pdf.ln(2)
 
-            # นำกราฟเส้นแนวโน้มมาใส่
+            # นำกราฟเส้นแนวโน้มมาใส่ในการทบทวน
             if fig_path and os.path.exists(fig_path):
-                pdf.set_font(font_name, 'B', 10)
-                pdf.cell(0, 6, txt="กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ:", ln=True)
-                pdf.image(fig_path, x=15, w=180)
-                pdf.ln(3)
+                pdf.set_font(font_name, 'B', 9.5)
+                pdf.cell(0, 5, txt="กราฟเส้นแสดงแนวโน้มเปรียบเทียบรายปีงบประมาณ:", ln=True)
+                pdf.image(fig_path, x=25, w=160)
+                pdf.ln(2)
 
             # นำตารางสรุปแผนก/หน่วยงานมาใส่
             if dept_df is not None and not dept_df.empty:
-                pdf.set_font(font_name, 'B', 10)
-                pdf.cell(0, 6, txt="สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้:", ln=True)
+                pdf.set_font(font_name, 'B', 9.5)
+                pdf.cell(0, 5, txt="สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้:", ln=True)
                 pdf.set_font(font_name, 'B', 9)
                 pdf.set_fill_color(240, 240, 240)
-                pdf.cell(120, 6, txt="หน่วยงาน/แผนก", border=1, fill=True)
-                pdf.cell(60, 6, txt="จำนวนครั้ง (เรื่อง)", border=1, fill=True, ln=True, align='C')
+                pdf.cell(110, 5, txt="หน่วยงาน/แผนก", border=1, fill=True)
+                pdf.cell(50, 5, txt="จำนวนครั้ง (เรื่อง)", border=1, fill=True, ln=True, align='C')
                 
                 pdf.set_font(font_name, '', 9)
                 for _, d_row in dept_df.iterrows():
-                    pdf.cell(120, 6, txt=str(d_row['หน่วยงาน/แผนก']), border=1)
-                    pdf.cell(60, 6, txt=str(d_row['จำนวนครั้ง (เรื่อง)']), border=1, ln=True, align='C')
-                pdf.ln(4)
-
-            pdf.set_font(font_name, 'B', 11)
-            pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
-            pdf.ln(2)
-
-            # นำภาพแผนภูมิก้างปลามาใส่
-            if fish_path and os.path.exists(fish_path):
-                pdf.image(fish_path, x=15, w=180)
+                    pdf.cell(110, 5, txt=str(d_row['หน่วยงาน/แผนก']), border=1)
+                    pdf.cell(50, 5, txt=str(d_row['จำนวนครั้ง (เรื่อง)']), border=1, ln=True, align='C')
                 pdf.ln(3)
 
-            pdf.set_font(font_name, '', 9)
-            pdf.multi_cell(0, 5, txt=f"- บุคลากร (Man): {str(man)}\n- เครื่องมือ (Machine): {str(machine)}\n- วัสดุ/สารเคมี (Material): {str(material)}\n- กระบวนการ (Method): {str(method)}\n- สิ่งแวดล้อม (Environment): {str(env)}")
-            pdf.ln(3)
-
-            pdf.set_font(font_name, 'B', 11)
+            pdf.set_font(font_name, 'B', 10.5)
             pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-            
-            pdf.set_font(font_name, '', 10)
-            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
-            pdf.ln(6)
+            pdf.cell(0, 7, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
+            pdf.ln(2)
 
-            pdf.set_font(font_name, 'B', 11)
+            # นำภาพแผนภูมิก้างปลา (ภาษาไทยปกติ) มาใส่
+            if fish_path and os.path.exists(fish_path):
+                pdf.image(fish_path, x=15, w=180)
+                pdf.ln(2)
+
+            pdf.set_font(font_name, '', 9)
+            pdf.multi_cell(0, 4.5, txt=f"- บุคลากร (Man): {str(man)}\n- เครื่องมือ (Machine): {str(machine)}\n- วัสดุ/สารเคมี (Material): {str(material)}\n- กระบวนการ (Method): {str(method)}\n- สิ่งแวดล้อม (Environment): {str(env)}")
+            pdf.ln(2)
+
+            pdf.set_font(font_name, 'B', 10.5)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.cell(0, 7, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
+            
+            pdf.set_font(font_name, '', 9.5)
+            pdf.multi_cell(0, 5, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
+            pdf.ln(4)
+
+            # ป้องกันหัวข้อหลักขาดตอนเมื่อขึ้นหน้าใหม่ (บังคับให้หัวข้อข้อ 3 ไปพร้อมกับพื้นที่เซ็นชื่ออย่างน้อย 40 มม.)
+            if pdf.get_y() > 240:
+                pdf.add_page()
+
+            pdf.set_font(font_name, 'B', 10.5)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             pdf.ln(2)
 
@@ -726,37 +743,31 @@ if not melted_all.empty:
                     pdf.set_xy(x_pos, y_pos)
                     pdf.set_font(font_name, '', 9)
                     
-                    # บรรทัดที่ 1: บทบาท
-                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
+                    pdf.cell(90, 4.5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
                     
-                    # บรรทัดที่ 2: ลายเซ็น (ขนาดใหญ่ขึ้นและปรับความสูงช่องรองรับ)
                     sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 2, h=25)
+                            pdf.image(rev['sig_path'], x=x_pos + 12, y=sig_y - 2, h=22)
                         except:
                             pass
                     
-                    # ปรับลดช่องไฟบรรทัดลงให้ชิดกับลายเซ็น ไม่ให้ห่างเกินไป
-                    pdf.set_xy(x_pos, sig_y + 18)
-                    pdf.cell(90, 5, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    pdf.set_xy(x_pos, sig_y + 16)
+                    pdf.cell(90, 4.5, txt=f"ลงชื่อ: ........................................................", ln=1)
                     
-                    # บรรทัดที่ 3: ชื่อ-สกุล (ชิดติดกับบรรทัดลายเซ็น)
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=1)
+                    pdf.cell(90, 4.5, txt=f"({str(rev['name'])})", ln=1)
                     
-                    # บรรทัดที่ 4: ตำแหน่ง
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
+                    pdf.cell(90, 4.5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
                     
-                    # บรรทัดที่ 5: วันที่ทบทวน
                     pdf.set_x(x_pos)
-                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
+                    pdf.cell(90, 4.5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
 
                 i = 0
                 while i < len(normal_reviewers):
-                    if pdf.get_y() > 210:
+                    if pdf.get_y() > 200:
                         pdf.add_page()
                     
                     y_start = pdf.get_y()
@@ -764,19 +775,19 @@ if not melted_all.empty:
                     
                     if i + 1 < len(normal_reviewers):
                         draw_signature_block(normal_reviewers[i+1], 110, y_start)
-                        pdf.set_y(y_start + 38)
+                        pdf.set_y(y_start + 35)
                     else:
-                        pdf.set_y(y_start + 38)
+                        pdf.set_y(y_start + 35)
                     
                     i += 2
 
                 for rev in director_reviewers:
-                    if pdf.get_y() > 210:
+                    if pdf.get_y() > 200:
                         pdf.add_page()
                     
-                    y_start = pdf.get_y() + 4
+                    y_start = pdf.get_y() + 2
                     draw_signature_block(rev, 60, y_start)
-                    pdf.set_y(y_start + 38)
+                    pdf.set_y(y_start + 35)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
@@ -788,7 +799,7 @@ if not melted_all.empty:
                     selected_risk_item, risk_lvl_val, 
                     fish_man, fish_machine, fish_material, fish_method, fish_env, 
                     corrective_action, preventive_action, 
-                    selected_reviewers_for_report, temp_fig_path, temp_fishbone_path, dept_summary
+                    selected_reviewers_for_report, temp_fig_path, temp_fishbone_path, dept_summary, budget_years_in_subset
                 )
                 st.session_state['capa_pdf_path'] = capa_pdf_path
                 
