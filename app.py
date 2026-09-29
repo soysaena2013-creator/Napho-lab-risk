@@ -37,54 +37,34 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-def safe_text(txt):
-    if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
-        return "-"
-    try:
-        # แปลงเป็น string และกำจัดไบต์ที่มีปัญหาออกเด็ดขาด
-        text_str = str(txt)
-        # ตัดตัวอักษรพิเศษหรือสัญลักษณ์ที่ทำให้เกิด UnicodeDecodeError / 0x80 ออก
-        cleaned = text_str.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
-        # แทนที่สัญลักษณ์พิเศษที่มักมีปัญหาในฟอนต์ PDF
-        cleaned = cleaned.replace('\r', ' ').replace('\n', ' ')
-        return cleaned
-    except Exception:
-        return "-"
-
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
 
+# --- กำหนด Session State สำหรับเก็บประวัติการทบทวนความเสี่ยง และรายชื่อคณะทำงานกลาง ---
 if 'saved_capa_reports' not in st.session_state:
     st.session_state['saved_capa_reports'] = []
 
 if 'master_reviewers' not in st.session_state:
     st.session_state['master_reviewers'] = [
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": "signatures/sarawut.png"},
-        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/preeda.png"},
-        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/rungnapa.png"},
-        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/lalida.png"},
-        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": "signatures/praneet.png"},
-        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": "signatures/sarawut.png"},
-        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": ""},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "นักเทคนิคการแพทย์ชำนาญการ", "role": "ผู้ทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "ทนพญ.ปรีดา ชาไข", "position": "นักเทคนิคการแพทย์ปฏิบัติการ", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "ทนพญ.รุ่งนภา สอนจันทร์", "position": "นักเทคนิคการแพทย์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "นางสาวลลิดา แก้วบุดศา", "position": "เจ้าพนักงานวิทยาศาสตร์ชำนาญงาน", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "นางสาวประณีต มิ่งไธสง", "position": "พนักงานวิทยาศาสตร์", "role": "ผู้ร่วมทบทวนความเสี่ยง", "sig_path": None},
+        {"name": "ทนพ.ศราวุธ สร้อยเสนา", "position": "หัวหน้ากลุ่มงานเทคนิคการแพทย์", "role": "ผู้จัดการความเสี่ยง", "sig_path": None},
+        {"name": "นพ.เวฬุวัน อินทอง", "position": "ผู้อำนวยการโรงพยาบาลนาโพธิ์", "role": "ผู้อนุมัติ", "sig_path": None},
     ]
 
+# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO เพื่อรองรับภาษาไทยและป้องกัน Error การเข้ารหัส
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
     try:
         response = requests.get(url)
         response.raise_for_status()
-        content = response.content
-        df = None
-        for enc in ['utf-8-sig', 'utf-8', 'tis-620', 'cp1252']:
-            try:
-                df = pd.read_csv(io.BytesIO(content), encoding=enc, errors='ignore')
-                break
-            except Exception:
-                continue
-        if df is None:
-            df = pd.read_csv(io.BytesIO(content), encoding='latin1', errors='ignore')
+        df = pd.read_csv(io.BytesIO(response.content))
     except Exception as e:
+        st.error(f"ไม่สามารถโหลดข้อมูลจากลิงก์ได้: {e}")
         return pd.DataFrame()
     
     df.columns = df.columns.str.strip()
@@ -92,18 +72,15 @@ def load_data():
         df[col] = df[col].astype(str).str.strip()
         df[col] = df[col].replace('nan', np.nan)
         
-    date_col = next((c for c in df.columns if 'วันที่เกิด' in c or 'Date' in c), None)
-    if date_col:
-        df['Date'] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
-    else:
-        df['Date'] = pd.NaT
-        
+    df['Date'] = pd.to_datetime(df['1.วันที่เกิดความเสี่ยง'], dayfirst=True, errors='coerce')
     df['Thai_Budget_Year'] = df['Date'].apply(get_thai_budget_year)
     return df
 
 df = load_data()
 
+# 2. Sidebar Filters & Controls
 st.sidebar.header("เครื่องมือสืบค้น")
+
 if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
     st.cache_data.clear()
     st.rerun()
@@ -111,6 +88,7 @@ if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทัน�
 if not df.empty:
     available_budget_years = sorted([int(y) for y in df['Thai_Budget_Year'].dropna().unique()], reverse=True)
     selected_budget_years = st.sidebar.multiselect("เลือกปีงบประมาณ (ไทย)", available_budget_years)
+
     quarter = st.sidebar.multiselect("เลือกไตรมาส", [1, 2, 3, 4])
 
     month_names = {
@@ -123,31 +101,32 @@ if not df.empty:
     selected_month_names = st.sidebar.multiselect("เลือกเดือน", list(month_options.keys()))
     selected_months = [month_options[m] for m in selected_month_names]
 
-    risk_type_col = next((c for c in df.columns if 'ประเภทความเสี่ยง' in c), None)
-    unit_col = next((c for c in df.columns if 'หน่วยงานที่ทำให้เกิดความเสี่ยง' in c), None)
-
-    risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df[risk_type_col].dropna().unique()) if risk_type_col else []
-    unit = st.sidebar.multiselect("หน่วยงาน", df[unit_col].dropna().unique()) if unit_col else []
+    risk_type = st.sidebar.multiselect("ประเภทความเสี่ยง", df['5.ประเภทความเสี่ยง'].dropna().unique())
+    unit = st.sidebar.multiselect("หน่วยงาน", df['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].dropna().unique())
 
     df_f = df.copy()
     if selected_budget_years: df_f = df_f[df_f['Thai_Budget_Year'].isin(selected_budget_years)]
     if quarter: df_f = df_f[df_f['Date'].dt.quarter.isin(quarter)]
     if selected_months: df_f = df_f[df_f['Date'].dt.month.isin(selected_months)]
-    if risk_type and risk_type_col: df_f = df_f[df_f[risk_type_col].isin(risk_type)]
-    if unit and unit_col: df_f = df_f[df_f[unit_col].isin(unit)]
+    if risk_type: df_f = df_f[df_f['5.ประเภทความเสี่ยง'].isin(risk_type)]
+    if unit: df_f = df_f[df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].isin(unit)]
 else:
     df_f = pd.DataFrame()
 
+# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุเกิดจาก (U) และ V&AA ---
 def extract_cause_values(row, columns_list):
     cause_text = ""
     for col in columns_list:
         col_str = str(col).strip()
         if 'สาเหตุ' in col_str or col_str.startswith('U.') or ' U ' in col_str or col_str == 'U':
             val = str(row.get(col, ''))
-            if val and val != 'nan' and val != 'None':
+            if val and val != 'nan':
                 cause_text = val
                 break
-    return cause_text if cause_text and cause_text != 'nan' and cause_text != 'None' else '-'
+    if not cause_text or cause_text == 'nan':
+        if len(row) > 20 and pd.notnull(row.iloc[20]) and str(row.iloc[20]) != 'nan':
+            cause_text = str(row.iloc[20])
+    return cause_text if cause_text and cause_text != 'nan' else '-'
 
 def extract_v_aa_values(row, columns_list):
     v_text, aa_text = "", ""
@@ -155,27 +134,36 @@ def extract_v_aa_values(row, columns_list):
         col_str = str(col).strip()
         if col_str.startswith('V.') or ' V ' in col_str or col_str == 'V':
             val = str(row.get(col, ''))
-            if val and val != 'nan' and val != 'None': v_text = val
+            if val and val != 'nan': v_text = val
         elif col_str.startswith('AA.') or ' AA ' in col_str or col_str == 'AA':
             val = str(row.get(col, ''))
-            if val and val != 'nan' and val != 'None': aa_text = val
+            if val and val != 'nan': aa_text = val
     
-    solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan' and x != 'None'])
+    if not v_text and not aa_text:
+        for idx_col, val_col in enumerate(row):
+            col_name = str(columns_list[idx_col])
+            if ('แก้ไข' in col_name or 'เบื้องต้น' in col_name) and 'เฉพาะหน้า' not in col_name and 'ผล' not in col_name:
+                if pd.notnull(val_col) and str(val_col) != 'nan':
+                    v_text = str(val_col)
+                    break
+
+    solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
+# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
 if len(st.session_state['saved_capa_reports']) > 0:
     for idx, report in enumerate(st.session_state['saved_capa_reports']):
-        risk_title_safe = str(report.get('risk_name', 'รายงาน'))
-        with st.sidebar.expander(f"🔹 {idx+1}. {risk_title_safe[:25]}..."):
-            st.write(f"**ระดับ:** {report.get('risk_lvl', '-')}")
-            st.write(f"**บันทึกเมื่อ:** {report.get('timestamp', '-')}")
+        with st.sidebar.expander(f"🔹 {idx+1}. {report['risk_name'][:25]}..."):
+            st.write(f"**ระดับ:** {report['risk_lvl']}")
+            st.write(f"**บันทึกเมื่อ:** {report['timestamp']}")
 else:
     st.sidebar.info("ยังไม่มีประวัติการบันทึกทบทวนความเสี่ยง")
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
+# --- ส่วนแสดง Metric สรุปภาพรวมเดิม ---
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -184,15 +172,15 @@ if not df_f.empty:
     risk_cols_m = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
     if risk_cols_m:
         m_temp = df_f.melt(value_vars=risk_cols_m, value_name='R_Det').dropna(subset=['R_Det'])
-        m_temp = m_temp[(m_temp['R_Det'] != '') & (m_temp['R_Det'] != 'None') & (m_temp['R_Det'] != 'nan')]
+        m_temp = m_temp[m_temp['R_Det'] != '']
         col_m2.metric("📋 รายการความเสี่ยงย่อย", f"{len(m_temp)} รายการ")
     else:
         col_m2.metric("📋 รายการความเสี่ยงย่อย", "-")
         
-    unit_count_val = df_f[unit_col].nunique() if unit_col and unit_col in df_f.columns else 0
-    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{unit_count_val} หน่วยงาน")
+    col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
     col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
+# --- ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม ---
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -203,27 +191,15 @@ def generate_pdf_table(dataframe):
     pdf.add_page()
     
     font_path = "Sarabun-Regular.ttf"
-    if not os.path.exists(font_path):
-        try:
-            font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
-            r = requests.get(font_url)
-            if r.status_code == 200:
-                with open(font_path, "wb") as f:
-                    f.write(r.content)
-        except:
-            pass
-
-    has_sarabun = os.path.exists(font_path)
-    if has_sarabun:
+    if os.path.exists(font_path):
         pdf.add_font("Sarabun", "", font_path)
         pdf.set_font("Sarabun", size=12)
     else:
         pdf.set_font("Arial", size=12)
 
-    pdf.cell(0, 6, txt=safe_text("Hospital Risk Incident Analysis Report - รพ.นาโพธิ์"), ln=True, align='C')
-    if has_sarabun: pdf.set_font("Sarabun", size=8)
-    else: pdf.set_font("Arial", size=8)
-    pdf.cell(0, 5, txt=safe_text(f"Total Filtered Incidents: {len(dataframe)} cases"), ln=True, align='L')
+    pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report - รพ.นาโพธิ์", ln=True, align='C')
+    pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
+    pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(2)
 
     headers = [
@@ -233,8 +209,7 @@ def generate_pdf_table(dataframe):
     ]
     col_widths = [9, 20, 22, 14, 30, 11, 28, 28, 28, 28, 38] 
 
-    if has_sarabun: pdf.set_font("Sarabun", size=7)
-    else: pdf.set_font("Arial", size=7)
+    pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
     
@@ -248,7 +223,7 @@ def generate_pdf_table(dataframe):
         y_curr = pdf.get_y()
         pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
         pdf.set_xy(x_curr, y_curr + 1.5)
-        pdf.multi_cell(col_widths[i], max_h_line, txt=safe_text(h), border=0, align='C')
+        pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
         pdf.set_xy(x_curr + col_widths[i], y_curr)
     
     pdf.set_xy(x_start_hdr, y_start_hdr + header_height)
@@ -257,20 +232,18 @@ def generate_pdf_table(dataframe):
 
     for idx, row in dataframe.iterrows():
         date_str = str(row['Date'].strftime('%Y-%m-%d')) if pd.notnull(row['Date']) else '-'
-        unit_name = str(row.get(unit_col, '-')) if unit_col else '-'
-        shift_col = next((c for c in dataframe.columns if 'ช่วงเวร' in c), None)
-        shift_val = str(row.get(shift_col, '-')) if shift_col else '-'
+        unit_name = str(row.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+        shift_val = str(row.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
         
         risk_desc = '-'
         for col in dataframe.columns:
-            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() not in ['', 'None', 'nan']:
+            if 'ระบุความเสี่ยงย่อย' in str(col) and pd.notnull(row[col]) and str(row[col]).strip() != '':
                 risk_desc = str(row[col])
                 break
 
         cause_val = extract_cause_values(row, dataframe.columns)
         solve_val = extract_v_aa_values(row, dataframe.columns)
-        level_col = next((c for c in dataframe.columns if c == 'LEVEL' or 'ระดับความเสี่ยง' in c), None)
-        level_val = str(row.get(level_col, '-')) if level_col else '-'
+        level_val = str(row.get('LEVEL', '-'))
         
         immediate_fix_val = '-'
         for col in dataframe.columns:
@@ -278,18 +251,15 @@ def generate_pdf_table(dataframe):
                 immediate_fix_val = str(row.get(col, '-'))
                 break
 
-        res_col = next((c for c in dataframe.columns if 'ผลการแก้ไข' in c), None)
-        result_val = str(row.get(res_col, '-')) if res_col else '-'
-        
-        imp_col = next((c for c in dataframe.columns if 'ผลกระทบ' in c), None)
-        impact_val = str(row.get(imp_col, '-')) if imp_col else '-'
+        result_val = str(row.get('ผลการแก้ไข', '-'))
+        impact_val = str(row.get('ผลกระทบต่อคนไข้', '-'))
 
         row_data = [str(idx+1), date_str, unit_name, shift_val, risk_desc, level_val, cause_val, immediate_fix_val, solve_val, result_val, impact_val]
 
         max_lines = 1
         for i, text in enumerate(row_data):
             w = col_widths[i]
-            txt_clean = safe_text(text)
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
             chars_per_line = max(int(w / 1.7), 3)
             lines = 0
             for paragraph in str(txt_clean).split('\n'):
@@ -301,8 +271,7 @@ def generate_pdf_table(dataframe):
 
         if pdf.get_y() + row_height > 195:
             pdf.add_page()
-            if has_sarabun: pdf.set_font("Sarabun", size=7)
-            else: pdf.set_font("Arial", size=7)
+            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
             pdf.set_fill_color(41, 128, 185)
             pdf.set_text_color(255, 255, 255)
             x_start_hdr2 = pdf.get_x()
@@ -312,12 +281,11 @@ def generate_pdf_table(dataframe):
                 y_curr = pdf.get_y()
                 pdf.cell(col_widths[i], header_height, txt="", border=1, fill=True)
                 pdf.set_xy(x_curr, y_curr + 1.5)
-                pdf.multi_cell(col_widths[i], max_h_line, txt=safe_text(h), border=0, align='C')
+                pdf.multi_cell(col_widths[i], max_h_line, txt=h, border=0, align='C')
                 pdf.set_xy(x_curr + col_widths[i], y_curr)
             pdf.set_xy(x_start_hdr2, y_start_hdr2 + header_height)
             pdf.set_text_color(0, 0, 0)
-            if has_sarabun: pdf.set_font("Sarabun", size=7)
-            else: pdf.set_font("Arial", size=7)
+            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
 
         is_even = (idx % 2 == 0)
         pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
@@ -328,10 +296,10 @@ def generate_pdf_table(dataframe):
 
         for i, text in enumerate(row_data):
             x_current = pdf.get_x()
-            txt_clean = safe_text(text)
+            txt_clean = text if text != 'nan' and pd.notnull(text) else '-'
             pdf.cell(col_widths[i], row_height, txt="", border=1, fill=True)
             pdf.set_xy(x_current, y_start + 1.0)
-            pdf.multi_cell(col_widths[i], line_height, txt=txt_clean, border=0, align=alignments[i])
+            pdf.multi_cell(col_widths[i], line_height, txt=str(txt_clean), border=0, align=alignments[i])
             pdf.set_xy(x_current + col_widths[i], y_start)
 
         pdf.set_xy(x_start, y_start + row_height)
@@ -346,23 +314,17 @@ if st.sidebar.button("📥 ดาวน์โหลดรายงานตา�
     try:
         pdf_path = generate_pdf_table(df_f)
         with open(pdf_path, "rb") as f:
-            st.sidebar.download_button(
-                label="คลิกเพื่อบันทึกไฟล์ PDF", 
-                data=f, 
-                file_name="Risk_Full_Report.pdf", 
-                mime="application/pdf",
-                key="download_full_pdf_btn"
-            )
+            st.sidebar.download_button("คลิกเพื่อบันทึกไฟล์ PDF", f, file_name="Risk_Full_Report.pdf", mime="application/pdf")
     except Exception as e:
-        st.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
+        st.sidebar.error(f"สร้าง PDF ไม่สำเร็จ: {e}")
 
+# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
-risk_type_col_name = next((c for c in df_f.columns if 'ประเภทความเสี่ยง' in c), None)
 
-if not df_f.empty and unit_col and unit_col in df_f.columns and risk_type_col_name:
+if not df_f.empty and '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns and '5.ประเภทความเสี่ยง' in df_f.columns:
     def get_clean_unit_category(row):
-        risk_type = str(row.get(risk_type_col_name, '')).strip()
+        risk_type = str(row.get('5.ประเภทความเสี่ยง', '')).strip()
         if 'คลินิก' in risk_type:
             if matched_event_cols:
                 ev_val = str(row.get(matched_event_cols[0], '')).strip()
@@ -373,19 +335,20 @@ if not df_f.empty and unit_col and unit_col in df_f.columns and risk_type_col_na
 
     df_f['Clean_Group'] = df_f.apply(get_clean_unit_category, axis=1)
     clean_bar_df = df_f.dropna(subset=['Clean_Group']).copy()
-    bar_df = clean_bar_df.groupby([unit_col, 'Clean_Group']).size().reset_index(name='count')
+    bar_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().reset_index(name='count')
     
     color_map = {'Miss (ทางคลินิก)': '#1f77b4', 'Near Miss (ทางคลินิก)': '#aec7e8', 'ความเสี่ยงทั่วไป': '#2ca02c'}
-    fig_bar = px.bar(bar_df, x=unit_col, y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
+    fig_bar = px.bar(bar_df, x='4.หน่วยงานที่ทำให้เกิดความเสี่ยง', y='count', color='Clean_Group', barmode='stack', text_auto=True, color_discrete_map=color_map)
     fig_bar.update_traces(textangle=0, textposition='inside')
     fig_bar.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14), xaxis=dict(tickangle=-30, type='category'))
     st.plotly_chart(fig_bar, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
+# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามหน่วยงาน ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
-if not df_f.empty and 'Clean_Group' in df_f.columns and unit_col:
-    stats_df = clean_bar_df.groupby([unit_col, 'Clean_Group']).size().unstack(fill_value=0)
+if not df_f.empty and 'Clean_Group' in df_f.columns:
+    stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
     stats_df['รวม'] = stats_df.sum(axis=1)
     for col in stats_df.columns:
         if col != 'รวม': stats_df[f'% {col}'] = (stats_df[col] / stats_df['รวม'] * 100).round(2)
@@ -393,13 +356,15 @@ if not df_f.empty and 'Clean_Group' in df_f.columns and unit_col:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
+#เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
-    melted_all = melted_all[~melted_all['Risk_Detail'].isin(['', 'None', 'nan'])]
+    melted_all = melted_all[melted_all['Risk_Detail'] != '']
 else:
     melted_all = pd.DataFrame()
 
+# --- 3. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
 st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
@@ -407,10 +372,10 @@ if not melted_all.empty:
     matrix_df = melted_all.groupby('Risk_Detail').size().reset_index(name='Frequency')
     
     def get_sev_from_row(risk_name):
-        sev_col = next((c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c), None)
+        sev_col = [c for c in df_f.columns if 'ระดับความรุนแรงทางคลินิก' in c]
         if not sev_col: return 'A'
         matches = df_f[df_f.isin([risk_name]).any(axis=1)]
-        return str(matches[sev_col].iloc[0]) if not matches.empty else 'A'
+        return matches[sev_col[0]].iloc[0] if not matches.empty else 'A'
 
     matrix_df['Sev_Raw'] = matrix_df['Risk_Detail'].apply(get_sev_from_row)
     matrix_df['Freq_Score'] = matrix_df['Frequency'].apply(get_freq_score)
@@ -444,6 +409,7 @@ if not melted_all.empty:
     fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_matrix, use_container_width=True)
 
+# --- 4. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
 
@@ -477,8 +443,9 @@ if not melted_all.empty:
         st.plotly_chart(fig_line, use_container_width=True)
 
         st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้")
-        if unit_col and unit_col in risk_subset.columns:
-            dept_summary = risk_subset[unit_col].value_counts().reset_index()
+        unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
+        if unit_col_name in risk_subset.columns:
+            dept_summary = risk_subset[unit_col_name].value_counts().reset_index()
             dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
             st.dataframe(dept_summary, use_container_width=True, hide_index=True)
         else:
@@ -492,9 +459,8 @@ if not melted_all.empty:
         table_rows = []
         for _, r in detail_view_df.iterrows():
             d_str = str(r['Date'].strftime('%Y-%m-%d')) if pd.notnull(r['Date']) else '-'
-            u_name = str(r.get(unit_col, '-')) if unit_col else '-'
-            shift_col = next((c for c in detail_view_df.columns if 'ช่วงเวร' in c), None)
-            shift = str(r.get(shift_col, '-')) if shift_col else '-'
+            u_name = str(r.get('4.หน่วยงานที่ทำให้เกิดความเสี่ยง', '-'))
+            shift = str(r.get('3.ช่วงเวรที่เกิดความเสี่ยง', '-'))
             cause_text = extract_cause_values(r, detail_view_df.columns)
             solve_text = extract_v_aa_values(r, detail_view_df.columns)
             
@@ -504,11 +470,8 @@ if not melted_all.empty:
                     imm_fix = str(r.get(col, '-'))
                     break
             
-            res_col = next((c for c in detail_view_df.columns if 'ผลการแก้ไข' in c), None)
-            res_val = str(r.get(res_col, '-')) if res_col else '-'
-            
-            imp_col = next((c for c in detail_view_df.columns if 'ผลกระทบ' in c), None)
-            imp_val = str(r.get(imp_col, '-')) if imp_col else '-'
+            res_val = str(r.get('ผลการแก้ไข', '-'))
+            imp_val = str(r.get('ผลกระทบต่อคนไข้', '-'))
             
             table_rows.append({
                 'วันที่เกิด': d_str,
@@ -539,52 +502,54 @@ if not melted_all.empty:
         
         col_rev1, col_rev2 = st.columns(2)
         with col_rev1:
-            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม", key="fish_man_input")
-            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า", key="fish_machine_input")
-            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด", key="fish_material_input")
+            fish_man = st.text_area("👤 บุคลากร (Man):", "เจ้าหน้าที่เวรปฏิบัติงานต่อเนื่องล้าช้า / การทวนสอบก่อนลงผลไม่รัดกุม")
+            fish_machine = st.text_area("⚙️ เครื่องมือ/อุปกรณ์ (Machine):", "ระบบเชื่อมต่อ LIS ขัดข้องชั่วขณะ หรือเครื่องวิเคราะห์แจ้งเตือนช้า")
+            fish_material = st.text_area("🧪 วัสดุ/สารเคมี (Material):", "คุณภาพสิ่งส่งตรวจหรือน้ำยาควบคุมคุณภาพไม่เป็นไปตามกำหนด")
         with col_rev2:
-            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน", key="fish_method_input")
-            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน", key="fish_env_input")
+            fish_method = st.text_area("📋 กระบวนการ/ขั้นตอน (Method):", "ขั้นตอน Double Check ก่อนอนุมัติผลยังไม่รัดกุมเพียงพอในช่วงเร่งด่วน")
+            fish_env = st.text_area("🌍 สิ่งแวดล้อม (Environment):", "อุณหภูมิ/ความชื้นห้องปฏิบัติการ หรือความแออัดและแสงสว่างหน้างาน")
             
-        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_input")
-        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_input")
+        corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่")
+        preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP")
 
+        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง (Master List) ---
         st.markdown("---")
-        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวน (ดึงรูปลายเซ็นจากโฟลเดอร์อัตโนมัติ)")
+        st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
         st.write("ติ๊กเลือกรายชื่อคณะทำงานที่ต้องการให้ร่วมลงนามในรายงานฉบับนี้:")
 
         selected_reviewers_for_report = []
         for idx, rev in enumerate(st.session_state['master_reviewers']):
-            is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']}) - *{rev['position']}*", value=True, key=f"chk_rev_{idx}")
+            col_chk, col_up = st.columns([3, 2])
+            with col_chk:
+                is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
+            with col_up:
+                sig_upload = st.file_uploader(f"อัปโหลดลายเซ็นของ {rev['name']}", type=["png", "jpg", "jpeg"], key=f"sig_file_{idx}")
+                if sig_upload is not None:
+                    tmp_s = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    tmp_s.write(sig_upload.read())
+                    st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
+
             if is_selected:
-                selected_reviewers_for_report.append(rev.copy())
+                selected_reviewers_for_report.append(st.session_state['master_reviewers'][idx])
+            st.markdown("---")
 
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ และรายชื่อคณะทำงานที่เลือก ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
             
             font_path = "Sarabun-Regular.ttf"
-            if not os.path.exists(font_path):
-                try:
-                    font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
-                    r = requests.get(font_url)
-                    if r.status_code == 200:
-                        with open(font_path, "wb") as f:
-                            f.write(r.content)
-                except:
-                    pass
-
-            has_sarabun = os.path.exists(font_path)
-            if has_sarabun:
+            if os.path.exists(font_path):
                 pdf.add_font("Sarabun", "", font_path)
                 pdf.set_font("Sarabun", size=14)
             else:
                 pdf.set_font("Arial", size=14)
 
+            # --- ส่วนหัวรายงาน (แทรกโลโก้ รพ.นาโพธิ์) ---
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
                 logo_resp = requests.get(logo_url)
@@ -597,22 +562,18 @@ if not melted_all.empty:
             except:
                 pass
 
-            if has_sarabun: pdf.set_font("Sarabun", '', 14)
-            else: pdf.set_font("Arial", 'B', 14)
-            pdf.cell(0, 7, txt=safe_text("โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)"), ln=True, align='C')
-            if has_sarabun: pdf.set_font("Sarabun", '', 11)
-            else: pdf.set_font("Arial", size=11)
-            pdf.cell(0, 6, txt=safe_text("กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)"), ln=True, align='C')
+            pdf.set_font("Sarabun", 'B', 14) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 14)
+            pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
+            pdf.set_font("Sarabun", size=11) if os.path.exists(font_path) else pdf.set_font("Arial", size=11)
+            pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)", ln=True, align='C')
             pdf.ln(2)
             
-            if has_sarabun: pdf.set_font("Sarabun", '', 12)
-            else: pdf.set_font("Arial", 'B', 12)
-            pdf.cell(0, 7, txt=safe_text("รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)"), ln=True, align='C')
+            pdf.set_font("Sarabun", 'B', 12) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 7, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
             pdf.ln(3)
 
-            if has_sarabun: pdf.set_font("Sarabun", '', 10)
-            else: pdf.set_font("Arial", size=10)
-            pdf.cell(0, 6, txt=safe_text(f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}"), ln=True)
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}", ln=True)
             pdf.ln(3)
 
             if fig_path and os.path.exists(fig_path):
@@ -620,26 +581,22 @@ if not melted_all.empty:
                 pdf.ln(3)
 
             pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt=safe_text("  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)"), ln=True, fill=True)
-            if has_sarabun: pdf.set_font("Sarabun", '', 10)
-            else: pdf.set_font("Arial", size=10)
-            pdf.multi_cell(0, 6, txt=safe_text(f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}"))
+            pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
             pdf.ln(3)
 
-            if has_sarabun: pdf.set_font("Sarabun", '', 12)
-            else: pdf.set_font("Arial", size=12)
+            pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
             pdf.set_fill_color(230, 240, 250)
-            pdf.cell(0, 8, txt=safe_text("  2. แนวทางแก้ไขและป้องกัน (CAPA)"), ln=True, fill=True)
-            if has_sarabun: pdf.set_font("Sarabun", '', 10)
-            else: pdf.set_font("Arial", size=10)
-            pdf.multi_cell(0, 6, txt=safe_text(f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}"))
+            pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
+            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
-            if has_sarabun: pdf.set_font("Sarabun", '', 11)
-            else: pdf.set_font("Arial", 'B', 11)
-            pdf.cell(0, 6, txt=safe_text("3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ"), ln=True)
-            if has_sarabun: pdf.set_font("Sarabun", '', 9)
-            else: pdf.set_font("Arial", size=9)
+            # --- ส่วนลงนามดิจิทัล ---
+            pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
+            pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
+            pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
             pdf.ln(2)
 
             if len(reviewers) > 0:
@@ -649,25 +606,21 @@ if not melted_all.empty:
                         pdf.add_page()
                         y_curr = pdf.get_y()
                     
-                    if has_sarabun: pdf.set_font("Sarabun", '', 9)
-                    else: pdf.set_font("Arial", size=9)
-                    pdf.cell(90, 5, txt=safe_text(f"บทบาท: {rev['role']}"), ln=0)
-                    pdf.cell(90, 5, txt=safe_text(f"วันที่: {datetime.now().strftime('%Y-%m-%d')}"), ln=1)
+                    pdf.cell(90, 5, txt=f"บทบาท: {rev['role']}", ln=0)
+                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
-                    sig_file = rev.get('sig_path')
-                    if sig_file and sig_file.strip() != "":
+                    if rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            if os.path.exists(sig_file):
-                                pdf.image(sig_file, x=20, y=pdf.get_y(), h=12)
-                        except Exception:
+                            pdf.image(rev['sig_path'], x=20, y=pdf.get_y(), h=12)
+                        except:
                             pass
                     
-                    pdf.cell(90, 14, txt=safe_text("ลงชื่อ: ........................................................"), ln=1)
-                    pdf.cell(90, 5, txt=safe_text(f"({rev['name']})"), ln=0)
-                    pdf.cell(90, 5, txt=safe_text(f"ตำแหน่ง: {rev['position']}"), ln=1)
+                    pdf.cell(90, 14, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    pdf.cell(90, 5, txt=f"({rev['name']})", ln=0)
+                    pdf.cell(90, 5, txt=f"ตำแหน่ง: {rev['position']}", ln=1)
                     pdf.ln(4)
             else:
-                pdf.cell(0, 6, txt=safe_text("(ไม่ได้เลือกรายชื่อผู้ร่วมทบทวนในรายงานฉบับนี้)"), ln=True)
+                pdf.cell(0, 6, txt="(ไม่ได้เลือกรายชื่อผู้ร่วมทบทวนในรายงานฉบับนี้)", ln=True)
 
             tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_pdf.name)
@@ -715,10 +668,9 @@ if not melted_all.empty:
                         label="📥 คลิกดาวน์โหลดเอกสาร PDF (รพ.นาโพธิ์)",
                         data=f,
                         file_name=f"CAPA_Report_NaPho_{selected_risk_item[:15]}.pdf",
-                        mime="application/pdf",
-                        key="download_capa_pdf_btn"
+                        mime="application/pdf"
                     )
-                st.success("สร้างรายงาน PDF สำเร็จ! สามารถคลิกปุ่มดาวน์โหลดด้านบนได้เลยครับ")
+                st.success("สร้างรายงาน PDF สำเร็จ! ระบบดึงรายชื่อคณะทำงานมาลงนามให้อัตโนมัติเรียบร้อยครับ")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
