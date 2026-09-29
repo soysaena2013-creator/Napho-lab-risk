@@ -444,7 +444,7 @@ if not melted_all.empty:
     fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-# --- 4. ฟังก์ชันทบทวนความเสี่ยง (ย้ายส่วน Trend & Review มาไว้รวมกันที่นี่ตามคำขอ) ---
+# --- 4. ฟังก์ชันทบทวนความเสี่ยง (Trend & Review, ตารางสรุปแผนกใต้กราฟ, 5M1E & CAPA) ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและวิเคราะห์เชิงลึก (Trend, 5M1E & CAPA Report)")
 
@@ -503,6 +503,16 @@ if not melted_all.empty:
             xaxis=dict(type='category', categoryorder='array', categoryarray=list(thai_budget_months.values()))
         )
         st.plotly_chart(fig_line, use_container_width=True)
+
+        # --- เพิ่มส่วนสรุปจำนวนความเสี่ยงแยกตามแต่ละแผนกใต้กราฟ (ตามที่ขอ) ---
+        st.markdown("##### 🏢 สรุปจำนวนความเสี่ยงแยกตามแผนก/หน่วยงาน สำหรับรายการนี้")
+        unit_col_name = '4.หน่วยงานที่ทำให้เกิดความเสี่ยง'
+        if unit_col_name in risk_subset.columns:
+            dept_summary = risk_subset[unit_col_name].value_counts().reset_index()
+            dept_summary.columns = ['หน่วยงาน/แผนก', 'จำนวนครั้ง (เรื่อง)']
+            st.dataframe(dept_summary, use_container_width=True, hide_index=True)
+        else:
+            st.info("ไม่พบข้อมูลคอลัมน์หน่วยงานในชุดข้อมูลนี้")
 
         # ตารางแสดงรายละเอียดอุบัติการณ์เชิงลึก
         st.markdown(f"**📋 รายละเอียดอุบัติการณ์เชิงลึกสำหรับทบทวน: `{selected_risk_item}`**")
@@ -566,10 +576,8 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️ มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="input_corr")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="input_prev")
 
-        # ค้นหาคะแนนความเสี่ยงของรายการนี้จาก matrix_df ถ้ามี
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
-        risk_mat_score = current_risk_row['Risk_Matrix'].iloc[0] if not current_risk_row.empty else 4
 
         def generate_capa_pdf(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -593,7 +601,6 @@ if not melted_all.empty:
             pdf.cell(0, 7, txt=f"ระดับความเสี่ยง: {risk_lvl}", ln=True)
             pdf.ln(3)
 
-            # แทรกรูปกราฟแนวโน้มใน PDF
             if fig_path and os.path.exists(fig_path):
                 pdf.image(fig_path, x=15, w=180)
                 pdf.ln(3)
@@ -616,7 +623,6 @@ if not melted_all.empty:
 
         if st.button("💾 บันทึกและออกเอกสารคุณภาพ (PDF) พร้อมกราฟแนวโน้ม"):
             try:
-                # สร้างรูปกราฟด้วย Matplotlib สำหรับใส่ใน PDF
                 plt.figure(figsize=(8, 3.5), dpi=300)
                 plt.plot(list(thai_budget_months.values()), merged_trend['Count'], marker='o', color='#1f77b4', linewidth=2, markersize=6)
                 plt.title(f"Trend Analysis: {selected_risk_item}", fontsize=11)
@@ -661,7 +667,7 @@ if not melted_all.empty:
                         file_name=f"CAPA_Report_{selected_risk_item[:15]}.pdf",
                         mime="application/pdf"
                     )
-                st.success("บันทึกข้อมูลและสร้างรายงาน PDF สำเร็จเรียบร้อยแล้ว! (สามารถเปิดดูประวัติย้อนหลังได้จากเมนูด้านซ้าย Sidebar)")
+                st.success("บันทึกข้อมูลและสร้างรายงาน PDF สำเร็จเรียบร้อยแล้ว!")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
 else:
