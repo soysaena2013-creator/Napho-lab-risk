@@ -40,12 +40,13 @@ def get_thai_budget_year(date):
 def safe_text(txt):
     if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
-    text_str = str(txt)
-    # ตัดอักขระพิเศษหรือจัดการ UTF-8 ป้องกันการ Encoding Error
+    # แปลงข้อมูลเป็น string และจัดการกรอง encoding ที่มีปัญหาออกทันทีเพื่อป้องกัน Error
     try:
-        return text_str.encode('utf-8', errors='ignore').decode('utf-8')
+        if isinstance(txt, bytes):
+            return txt.decode('utf-8', errors='ignore')
+        return str(txt).encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
     except Exception:
-        return str(text_str)
+        return "".join([c for c in str(txt) if ord(c) < 128]) # Fallback เป็น ASCII พื้นฐานหากแปลงไม่ได้
 
 # ----------------------------------------------------
 st.set_page_config(layout="wide")
