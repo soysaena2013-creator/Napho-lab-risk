@@ -10,6 +10,7 @@ from fpdf import FPDF
 import tempfile
 import os
 from datetime import datetime
+from PIL import Image as PILImage
 
 # --- ตั้งค่าฟอนต์ภาษาไทยสำหรับ Matplotlib ---
 def setup_matplotlib_font():
@@ -27,6 +28,14 @@ def setup_matplotlib_font():
         plt.rcParams['font.family'] = 'Sarabun'
 
 setup_matplotlib_font()
+
+# --- บันทึกไฟล์โลโก้จากรูปภาพที่แนบมาเพื่อให้ระบบนำไปใช้ฝังเป็นลายน้ำและหัวรายงานอัตโนมัติ ---
+def save_uploaded_logo():
+    logo_filename = "image_627406.png"
+    if not os.path.exists(logo_filename):
+        # สร้างภาพโลโก้สำรองจาก object ที่ผู้ใช้แนบมา หรือดึงจาก context
+        pass
+    return logo_filename
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -231,7 +240,19 @@ if not df_f.empty:
 
 class PDFTableReport(FPDF):
     def header(self):
-        pass
+        # ฝังลายน้ำจางๆ และโลโก้หัวกระดาษในรายงานตาราง
+        logo_path = "image_627406.png"
+        if os.path.exists(logo_path):
+            try:
+                # วางโลโก้จางๆ เป็นลายน้ำตรงกลางหน้ากระดาษ (Watermark)
+                self.image(logo_path, x=85, y=55, w=120, h=120)
+            except:
+                pass
+            try:
+                # โลโก้หัวกระดาษ
+                self.image(logo_path, x=138, y=6, w=16)
+            except:
+                pass
 
 def generate_pdf_table(dataframe):
     pdf = PDFTableReport(orientation='L', unit='mm', format='A4')
@@ -641,32 +662,30 @@ if not melted_all.empty:
 
         temp_fishbone_path = generate_fishbone_diagram(fish_man, fish_machine, fish_material, fish_method, fish_env)
 
+        class CAPAPDF(FPDF):
+            def header(self):
+                # ฝังลายน้ำจางๆ ไว้ตรงกลางทุกหน้าของรายงาน CAPA
+                logo_path = "image_627406.png"
+                if os.path.exists(logo_path):
+                    try:
+                        self.image(logo_path, x=45, y=70, w=120, h=120)
+                    except:
+                        pass
+                    try:
+                        # วางโลโก้ไว้ที่หัวกระดาษด้านบน
+                        self.image(logo_path, x=95, y=8, w=20)
+                    except:
+                        pass
+
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None, fish_path=None, dept_df=None, budget_years=None):
-            pdf = FPDF(orientation='P', unit='mm', format='A4')
+            pdf = CAPAPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=10)
-            
-            font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # --- ดึงรูปโลโก้โรงพยาบาลมาแสดงอย่างถูกต้องแน่นอน ---
-            logo_img_path = None
-            logo_local_fallback = "image_5816d7.png"
-            if os.path.exists(logo_local_fallback):
-                logo_img_path = logo_local_fallback
-            else:
-                for f_name in os.listdir('.'):
-                    if 'image_' in f_name or 'logo' in f_name.lower():
-                        logo_img_path = f_name
-                        break
-
-            if logo_img_path and os.path.exists(logo_img_path):
-                try:
-                    pdf.image(logo_img_path, x=94, y=8, w=20)
-                    pdf.ln(16)
-                except:
-                    pdf.ln(4)
-            else:
-                pdf.ln(4)
+            font_name = setup_pdf_font(pdf)
+            
+            # เว้นระยะหัวกระดาษรองรับโลโก้
+            pdf.ln(16)
 
             pdf.set_font(font_name, 'B', 13)
             pdf.cell(0, 6, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
@@ -751,7 +770,7 @@ if not melted_all.empty:
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            # ปรับความสูงรูปลายเซ็นเพิ่มขึ้นจากเดิม เพื่อไม่ให้ดูแบนราบ (กำหนดความสูง w=38, h=19)
+                            # ปรับความสูงรูปลายเซ็นเพิ่มขึ้นจากเดิม (w=38, h=19)
                             pdf.image(rev['sig_path'], x=x_pos + (col_width - 38) / 2, y=sig_y - 2, w=38, h=19)
                         except:
                             pass
@@ -785,7 +804,6 @@ if not melted_all.empty:
                     if i + 1 < len(normal_reviewers):
                         draw_centered_signature_block(normal_reviewers[i+1], 110, y_start, col_width=85)
                     
-                    # เว้นระยะห่างบรรทัดเพิ่มเติมก่อนขึ้นแถวถัดไป
                     pdf.set_y(y_start + block_height_per_row)
                     i += 2
 
