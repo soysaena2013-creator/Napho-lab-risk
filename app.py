@@ -37,7 +37,7 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยแบบปลอดภัย 100% ---
+# --- ฟังก์ชันจัดการฟอนต์ภาษาไทยสำหรับ fpdf2 ---
 def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
     font_bold_path = "Sarabun-Bold.ttf"
@@ -56,14 +56,10 @@ def setup_pdf_font(pdf):
     try:
         if os.path.exists(font_path) and os.path.getsize(font_path) > 1000:
             pdf.add_font("Sarabun", "", font_path)
-        else:
-            raise Exception("Font file missing")
-            
         if os.path.exists(font_bold_path) and os.path.getsize(font_bold_path) > 1000:
             pdf.add_font("Sarabun", "B", font_bold_path)
         else:
             pdf.add_font("Sarabun", "B", font_path)
-            
         return "Sarabun"
     except Exception as e:
         return "Arial"
@@ -92,7 +88,6 @@ if 'full_pdf_path' not in st.session_state:
 if 'capa_pdf_path' not in st.session_state:
     st.session_state['capa_pdf_path'] = None
 
-# โหลดข้อมูลผ่าน requests และ io.BytesIO
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -152,7 +147,6 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
-# ฟังก์ชันช่วยดึงข้อมูลสาเหตุ (U) และ V&AA
 def extract_cause_values(row, columns_list):
     cause_text = ""
     for col in columns_list:
@@ -189,7 +183,6 @@ def extract_v_aa_values(row, columns_list):
     solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
-# แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
 if len(st.session_state['saved_capa_reports']) > 0:
@@ -202,7 +195,6 @@ else:
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# ส่วนแสดง Metric สรุปภาพรวม
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -219,7 +211,6 @@ if not df_f.empty:
     col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
     col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
-# ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -343,7 +334,6 @@ def generate_pdf_table(dataframe):
     pdf.output(tmp_file.name)
     return tmp_file.name
 
-# Sidebar: ปุ่มสร้างและดาวน์โหลดรายงานภาพรวม
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงานภาพรวม")
 if st.sidebar.button("⚙️ ประมวลผลสร้างรายงานตาราง PDF"):
@@ -364,7 +354,6 @@ if st.session_state['full_pdf_path'] and os.path.exists(st.session_state['full_p
             key="dl_full_pdf"
         )
 
-# --- 1. แผนภูมิแท่งแยกตามรายหน่วยงาน ---
 st.subheader("📊 จำนวนความเสี่ยงแยกตามรายหน่วยงาน (ความเสี่ยงทางคลินิก [Miss/Near Miss] และ ความเสี่ยงทั่วไป)")
 matched_event_cols = [c for c in df_f.columns if 'รูปแบบเหตุการณ์' in str(c)]
 
@@ -391,7 +380,6 @@ if not df_f.empty and '4.หน่วยงานที่ทำให้เก�
 else:
     st.info("ไม่มีข้อมูลในช่วงเวลาหรือเงื่อนไขที่เลือก")
 
-# --- 2. ตารางสรุปสถิติอุบัติการณ์แยกตามหน่วยงาน ---
 st.subheader("ตารางสรุปสถิติอุบัติการณ์แยกตามรายหน่วยงาน")
 if not df_f.empty and 'Clean_Group' in df_f.columns:
     stats_df = clean_bar_df.groupby(['4.หน่วยงานที่ทำให้เกิดความเสี่ยง', 'Clean_Group']).size().unstack(fill_value=0)
@@ -409,7 +397,6 @@ if not df_f.empty and risk_cols:
 else:
     melted_all = pd.DataFrame()
 
-# --- 3. ตารางและแผนภูมิ Risk Matrix ---
 st.markdown("---")
 st.subheader("📋 ตาราง Risk Matrix (สรุปรายความเสี่ยงย่อย)")
 
@@ -454,7 +441,6 @@ if not melted_all.empty:
     fig_matrix.update_layout(font=dict(family="Tahoma, Sarabun, sans-serif", size=14))
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-# --- 4. ฟังก์ชันทบทวนความเสี่ยง และเลือกลายเซ็นจากรายชื่อกลาง ---
 st.markdown("---")
 st.subheader("📝 ฟังก์ชันทบทวนความเสี่ยงและเลือกรายชื่อผู้ร่วมทบทวน (Master Reviewers List)")
 
@@ -557,7 +543,6 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_k")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_k")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงาน ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
         st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำและไม่มีอาการหน้าจอกระพริบ:")
@@ -588,7 +573,6 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # แปลงกราฟเส้นแนวโน้มเป็นรูปภาพชั่วคราวสำหรับใส่ใน PDF
         temp_fig_path = None
         try:
             fig_bytes = fig_line.to_image(format="png", width=800, height=400, scale=2)
@@ -606,7 +590,6 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # --- แก้ไขปัญหา编码 (Encoding) โดยบังคับเรียกใช้ฟอนต์ไทยเสมอ ---
             pdf.set_font(font_name, size=14)
 
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
@@ -627,7 +610,7 @@ if not melted_all.empty:
             pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
             
             pdf.set_font(font_name, '', 11)
-            pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)", ln=True, align='C')
+            pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์", ln=True, align='C')
             pdf.ln(2)
             
             pdf.set_font(font_name, 'B', 12)
@@ -656,44 +639,75 @@ if not melted_all.empty:
             
             pdf.set_font(font_name, '', 10)
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
-            pdf.ln(8)
+            pdf.ln(6)
 
             pdf.set_font(font_name, 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-            
-            pdf.set_font(font_name, '', 9)
             pdf.ln(2)
 
             if len(reviewers) > 0:
-                for rev in reviewers:
-                    y_curr = pdf.get_y()
-                    if y_curr > 250:
-                        pdf.add_page()
-                        pdf.set_font(font_name, '', 9) # กำหนดฟอนต์ซ้ำหลังขึ้นหน้าใหม่ ป้องกัน Error
-                        y_curr = pdf.get_y()
-                    
+                normal_reviewers = [r for r in reviewers if "ผู้อำนวยการ" not in str(r['position']) and "ผู้อนุมัติ" not in str(r['role'])]
+                director_reviewers = [r for r in reviewers if "ผู้อำนวยการ" in str(r['position']) or "ผู้อนุมัติ" in str(r['role'])]
+
+                def draw_signature_block(rev, x_pos, y_pos):
+                    pdf.set_xy(x_pos, y_pos)
                     pdf.set_font(font_name, '', 9)
-                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=0)
-                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
                     
+                    # บรรทัดที่ 1: บทบาท
+                    pdf.cell(90, 5, txt=f"บทบาท: {str(rev['role'])}", ln=1)
+                    
+                    # บรรทัดที่ 2: ลายเซ็น
+                    sig_y = pdf.get_y()
                     is_director = ("ผู้อำนวยการ" in str(rev['position']) or "ผู้อนุมัติ" in str(rev['role']))
-                    
                     if not is_director and rev['sig_path'] and os.path.exists(rev['sig_path']):
                         try:
-                            pdf.image(rev['sig_path'], x=20, y=pdf.get_y(), h=12)
+                            pdf.image(rev['sig_path'], x=x_pos + 15, y=sig_y, h=10)
                         except:
                             pass
                     
-                    pdf.cell(90, 14, txt=f"ลงชื่อ: ........................................................", ln=1)
-                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=0)
+                    pdf.set_xy(x_pos, sig_y)
+                    pdf.cell(90, 12, txt=f"ลงชื่อ: ........................................................", ln=1)
+                    
+                    # บรรทัดที่ 3: ชื่อ-สกุล
+                    pdf.set_x(x_pos)
+                    pdf.cell(90, 5, txt=f"({str(rev['name'])})", ln=1)
+                    
+                    # บรรทัดที่ 4: ตำแหน่ง
+                    pdf.set_x(x_pos)
                     pdf.cell(90, 5, txt=f"ตำแหน่ง: {str(rev['position'])}", ln=1)
-                    pdf.ln(4)
+                    
+                    # บรรทัดที่ 5: วันที่ทบทวน
+                    pdf.set_x(x_pos)
+                    pdf.cell(90, 5, txt=f"วันที่: {datetime.now().strftime('%Y-%m-%d')}", ln=1)
+
+                i = 0
+                while i < len(normal_reviewers):
+                    if pdf.get_y() > 240:
+                        pdf.add_page()
+                    
+                    y_start = pdf.get_y()
+                    draw_signature_block(normal_reviewers[i], 15, y_start)
+                    
+                    if i + 1 < len(normal_reviewers):
+                        draw_signature_block(normal_reviewers[i+1], 110, y_start)
+                        pdf.set_y(y_start + 32)
+                    else:
+                        pdf.set_y(y_start + 32)
+                    
+                    i += 2
+
+                for rev in director_reviewers:
+                    if pdf.get_y() > 235:
+                        pdf.add_page()
+                    
+                    y_start = pdf.get_y() + 4
+                    draw_signature_block(rev, 60, y_start)
+                    pdf.set_y(y_start + 32)
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             pdf.output(tmp_file.name)
             return tmp_file.name
 
-        # ปุ่มสร้างและดาวน์โหลดรายงาน CAPA PDF
         if st.button("📄 ประมวลผลสร้างรายงาน CAPA PDF"):
             try:
                 capa_pdf_path = generate_capa_pdf_with_master_list(
