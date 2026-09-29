@@ -198,15 +198,35 @@ def generate_pdf_table(dataframe):
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
+    # --- ระบบจัดการฟอนต์อัตโนมัติ (ป้องกัน Error utf-8) ---
     font_path = "Sarabun-Regular.ttf"
+    if not os.path.exists(font_path):
+        try:
+            font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
+            r = requests.get(font_url)
+            with open(font_path, "wb") as f:
+                f.write(r.content)
+        except:
+            pass
+
     if os.path.exists(font_path):
-        pdf.add_font("Sarabun", "", font_path)
-        pdf.set_font("Sarabun", size=12)
+        try:
+            pdf.add_font("Sarabun", "", font_path, uni=True)
+            pdf.set_font("Sarabun", size=12)
+        except:
+            pdf.set_font("Arial", size=12)
     else:
         pdf.set_font("Arial", size=12)
 
     pdf.cell(0, 6, txt="Hospital Risk Incident Analysis Report - รพ.นาโพธิ์", ln=True, align='C')
-    pdf.set_font("Sarabun", size=8) if os.path.exists(font_path) else pdf.set_font("Arial", size=8)
+    if os.path.exists(font_path):
+        try:
+            pdf.set_font("Sarabun", size=8)
+        except:
+            pdf.set_font("Arial", size=8)
+    else:
+        pdf.set_font("Arial", size=8)
+        
     pdf.cell(0, 5, txt=f"Total Filtered Incidents: {len(dataframe)} cases", ln=True, align='L')
     pdf.ln(2)
 
@@ -217,7 +237,14 @@ def generate_pdf_table(dataframe):
     ]
     col_widths = [9, 20, 22, 14, 30, 11, 28, 28, 28, 28, 38] 
 
-    pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+    if os.path.exists(font_path):
+        try:
+            pdf.set_font("Sarabun", size=7)
+        except:
+            pdf.set_font("Arial", size=7)
+    else:
+        pdf.set_font("Arial", size=7)
+        
     pdf.set_fill_color(41, 128, 185)
     pdf.set_text_color(255, 255, 255)
     
@@ -279,7 +306,14 @@ def generate_pdf_table(dataframe):
 
         if pdf.get_y() + row_height > 195:
             pdf.add_page()
-            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=7)
+                except:
+                    pdf.set_font("Arial", size=7)
+            else:
+                pdf.set_font("Arial", size=7)
+                
             pdf.set_fill_color(41, 128, 185)
             pdf.set_text_color(255, 255, 255)
             x_start_hdr2 = pdf.get_x()
@@ -293,7 +327,13 @@ def generate_pdf_table(dataframe):
                 pdf.set_xy(x_curr + col_widths[i], y_curr)
             pdf.set_xy(x_start_hdr2, y_start_hdr2 + header_height)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Sarabun", size=7) if os.path.exists(font_path) else pdf.set_font("Arial", size=7)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=7)
+                except:
+                    pdf.set_font("Arial", size=7)
+            else:
+                pdf.set_font("Arial", size=7)
 
         is_even = (idx % 2 == 0)
         pdf.set_fill_color(248, 249, 250) if is_even else pdf.set_fill_color(255, 255, 255)
@@ -572,10 +612,23 @@ if not melted_all.empty:
             pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
             
+            # --- ระบบจัดการฟอนต์อัตโนมัติ (ป้องกัน Error utf-8) ---
             font_path = "Sarabun-Regular.ttf"
+            if not os.path.exists(font_path):
+                try:
+                    font_url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
+                    r = requests.get(font_url)
+                    with open(font_path, "wb") as f:
+                        f.write(r.content)
+                except:
+                    pass
+
             if os.path.exists(font_path):
-                pdf.add_font("Sarabun", "", font_path)
-                pdf.set_font("Sarabun", size=14)
+                try:
+                    pdf.add_font("Sarabun", "", font_path, uni=True)
+                    pdf.set_font("Sarabun", size=14)
+                except:
+                    pdf.set_font("Arial", size=14)
             else:
                 pdf.set_font("Arial", size=14)
 
@@ -592,17 +645,46 @@ if not melted_all.empty:
             except:
                 pass
 
-            pdf.set_font("Sarabun", 'B', 14) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 14)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", 'B', 14)
+                except:
+                    pdf.set_font("Arial", 'B', 14)
+            else:
+                pdf.set_font("Arial", 'B', 14)
+                
             pdf.cell(0, 7, txt="โรงพยาบาลนาโพธิ์ จังหวัดบุรีรัมย์ (Na Pho Hospital)", ln=True, align='C')
-            pdf.set_font("Sarabun", size=11) if os.path.exists(font_path) else pdf.set_font("Arial", size=11)
+            
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=11)
+                except:
+                    pdf.set_font("Arial", size=11)
+            else:
+                pdf.set_font("Arial", size=11)
+                
             pdf.cell(0, 6, txt="กลุ่มงานเทคนิคการแพทย์และพยาธิวิทยาคลินิก (ISO 15189 Risk Review)", ln=True, align='C')
             pdf.ln(2)
             
-            pdf.set_font("Sarabun", 'B', 12) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 12)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", 'B', 12)
+                except:
+                    pdf.set_font("Arial", 'B', 12)
+            else:
+                pdf.set_font("Arial", 'B', 12)
+                
             pdf.cell(0, 7, txt="รายงานการทบทวนความเสี่ยงและมาตรการป้องกันแก้ไข (CAPA Report)", ln=True, align='C')
             pdf.ln(3)
 
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=10)
+                except:
+                    pdf.set_font("Arial", size=10)
+            else:
+                pdf.set_font("Arial", size=10)
+                
             pdf.cell(0, 6, txt=f"รายการความเสี่ยง: {risk_name} | ระดับความเสี่ยง: {risk_lvl}", ln=True)
             pdf.ln(3)
 
@@ -612,21 +694,59 @@ if not melted_all.empty:
 
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  1. การวิเคราะห์สาเหตุ (Root Cause Analysis - ก้างปลา 5M1E)", ln=True, fill=True)
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=10)
+                except:
+                    pdf.set_font("Arial", size=10)
+            else:
+                pdf.set_font("Arial", size=10)
+                
             pdf.multi_cell(0, 6, txt=f"- บุคลากร (Man): {man}\n- เครื่องมือ (Machine): {machine}\n- วัสดุ/สารเคมี (Material): {material}\n- กระบวนการ (Method): {method}\n- สิ่งแวดล้อม (Environment): {env}")
             pdf.ln(3)
 
-            pdf.set_font("Sarabun", size=12) if os.path.exists(font_path) else pdf.set_font("Arial", size=12)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=12)
+                except:
+                    pdf.set_font("Arial", size=12)
+            else:
+                pdf.set_font("Arial", size=12)
+                
             pdf.set_fill_color(230, 240, 250)
             pdf.cell(0, 8, txt="  2. แนวทางแก้ไขและป้องกัน (CAPA)", ln=True, fill=True)
-            pdf.set_font("Sarabun", size=10) if os.path.exists(font_path) else pdf.set_font("Arial", size=10)
+            
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=10)
+                except:
+                    pdf.set_font("Arial", size=10)
+            else:
+                pdf.set_font("Arial", size=10)
+                
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {corr_act}\n- มาตรการป้องกันระยะยาว: {prev_act}")
             pdf.ln(8)
 
             # --- ส่วนลงนามดิจิทัล ---
-            pdf.set_font("Sarabun", 'B', 11) if os.path.exists(font_path) else pdf.set_font("Arial", 'B', 11)
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", 'B', 11)
+                except:
+                    pdf.set_font("Arial", 'B', 11)
+            else:
+                pdf.set_font("Arial", 'B', 11)
+                
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
-            pdf.set_font("Sarabun", size=9) if os.path.exists(font_path) else pdf.set_font("Arial", size=9)
+            
+            if os.path.exists(font_path):
+                try:
+                    pdf.set_font("Sarabun", size=9)
+                except:
+                    pdf.set_font("Arial", size=9)
+            else:
+                pdf.set_font("Arial", size=9)
+                
             pdf.ln(2)
 
             if len(reviewers) > 0:
