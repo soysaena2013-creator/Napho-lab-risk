@@ -38,25 +38,25 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยสำหรับ FPDF (รองรับ fpdf2) ---
+# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยสำหรับ FPDF (ใช้ CDN ที่เสถียรขึ้น) ---
 def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
     font_bold_path = "Sarabun-Bold.ttf"
     
-    # ดาวน์โหลดฟอนต์ Sarabun ปกติ
+    # ดาวน์โหลดฟอนต์ Sarabun ปกติผ่าน jsDelivr CDN
     if not os.path.exists(font_path):
         try:
-            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf")
+            r = requests.get("https://cdn.jsdelivr.net/gh/google/fonts/ofl/sarabun/Sarabun-Regular.ttf", timeout=10)
             if r.status_code == 200:
                 with open(font_path, "wb") as f:
                     f.write(r.content)
         except:
             pass
 
-    # ดาวน์โหลดฟอนต์ Sarabun ตัวหนา
+    # ดาวน์โหลดฟอนต์ Sarabun ตัวหนาผ่าน jsDelivr CDN
     if not os.path.exists(font_bold_path):
         try:
-            r = requests.get("https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf")
+            r = requests.get("https://cdn.jsdelivr.net/gh/google/fonts/ofl/sarabun/Sarabun-Bold.ttf", timeout=10)
             if r.status_code == 200:
                 with open(font_bold_path, "wb") as f:
                     f.write(r.content)
@@ -600,13 +600,14 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ที่ปลอดภัย (ป้องกันลิงก์ Drive เสีย/ติดหน้า HTML) ---
+        # --- ฟังก์ชันสร้าง PDF พร้อมฝังโลโก้ที่ปลอดภัย ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
-            pdf.add_page()
             
+            # โหลดฟอนต์ภาษาไทยก่อน add_page เพื่อป้องกันปัญหา encoding
             font_name = setup_pdf_font(pdf)
+            pdf.add_page()
             pdf.set_font(font_name, size=14)
 
             # --- ส่วนหัวรายงาน (แทรกโลโก้แบบปลอดภัย: ตรวจสอบประเภทไฟล์ไม่ให้เป็น HTML) ---
