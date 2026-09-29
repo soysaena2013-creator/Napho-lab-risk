@@ -9,7 +9,6 @@ from fpdf import FPDF
 import tempfile
 import os
 from datetime import datetime
-import base64
 
 # --- ฟังก์ชันสนับสนุน ---
 def get_risk_level(score):
@@ -38,12 +37,11 @@ def get_thai_budget_year(date):
     else:
         return date.year + 543
 
-# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยแบบปลอดภัย 100% (ไม่ต้องโหลดจากเน็ต ป้องกัน Error) ---
+# --- ฟังก์ชันโหลดฟอนต์ภาษาไทยแบบปลอดภัย 100% ---
 def setup_pdf_font(pdf):
     font_path = "Sarabun-Regular.ttf"
     font_bold_path = "Sarabun-Bold.ttf"
     
-    # ดาวน์โหลดสำรองถ้ายังไม่มี
     for path, url in [(font_path, "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"),
                       (font_bold_path, "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Bold.ttf")]:
         if not os.path.exists(path) or os.path.getsize(path) < 1000:
@@ -64,11 +62,10 @@ def setup_pdf_font(pdf):
         if os.path.exists(font_bold_path) and os.path.getsize(font_bold_path) > 1000:
             pdf.add_font("Sarabun", "B", font_bold_path)
         else:
-            pdf.add_font("Sarabun", "B", font_path) # Fallback ใช้ตัวปกติถ้าตัวหนาไม่มี
+            pdf.add_font("Sarabun", "B", font_path)
             
         return "Sarabun"
     except Exception as e:
-        # กรณีฉุกเฉินจริงๆ สร้างไฟล์ฟอนต์เปล่าหรือใช้ฟอนต์มาตรฐานแทนเพื่อไม่ให้แอปพัง
         return "Arial"
 
 # ----------------------------------------------------
@@ -95,7 +92,7 @@ if 'full_pdf_path' not in st.session_state:
 if 'capa_pdf_path' not in st.session_state:
     st.session_state['capa_pdf_path'] = None
 
-# 1. โหลดข้อมูลผ่าน requests และ io.BytesIO
+# โหลดข้อมูลผ่าน requests และ io.BytesIO
 @st.cache_data(ttl=1)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8i7qAIxzDWkWCEnZZEjn8xLY8PT7edgUuTtEsh6aMjBHbj2qo-By5X7LxB1VjMovP9U-FUOkupWUm/pub?output=csv"
@@ -118,7 +115,7 @@ def load_data():
 
 df = load_data()
 
-# 2. Sidebar Filters & Controls
+# Sidebar Filters & Controls
 st.sidebar.header("เครื่องมือสืบค้น")
 
 if st.sidebar.button("🔄 โหลดข้อมูลใหม่ทันที"):
@@ -155,7 +152,7 @@ if not df.empty:
 else:
     df_f = pd.DataFrame()
 
-# --- ฟังก์ชันช่วยดึงข้อมูลสาเหตุ (U) และ V&AA ---
+# ฟังก์ชันช่วยดึงข้อมูลสาเหตุ (U) และ V&AA
 def extract_cause_values(row, columns_list):
     cause_text = ""
     for col in columns_list:
@@ -192,7 +189,7 @@ def extract_v_aa_values(row, columns_list):
     solve_val = " / ".join([x for x in [v_text, aa_text] if x and x != 'nan'])
     return solve_val if solve_val else '-'
 
-# --- แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar ---
+# แสดงประวัติการทบทวนที่บันทึกไว้ใน Sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 ประวัติการทบทวนความเสี่ยง (CAPA)")
 if len(st.session_state['saved_capa_reports']) > 0:
@@ -205,7 +202,7 @@ else:
 
 st.title("🏥 Dashboard ติดตามความเสี่ยงทางห้องปฏิบัติการ (รพ.นาโพธิ์)")
 
-# --- ส่วนแสดง Metric สรุปภาพรวม ---
+# ส่วนแสดง Metric สรุปภาพรวม
 if not df_f.empty:
     total_cases = len(df_f)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -222,7 +219,7 @@ if not df_f.empty:
     col_m3.metric("🏢 หน่วยงานที่เกี่ยวข้อง", f"{df_f['4.หน่วยงานที่ทำให้เกิดความเสี่ยง'].nunique() if '4.หน่วยงานที่ทำให้เกิดความเสี่ยง' in df_f.columns else 0} หน่วยงาน")
     col_m4.metric("📅 ช่วงข้อมูล", f"ปีงบ {selected_budget_years if selected_budget_years else 'ทั้งหมด'}")
 
-# --- ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม ---
+# ฟังก์ชันสร้างรายงานตาราง PDF สรุปภาพรวม
 class PDFTableReport(FPDF):
     def header(self):
         pass
@@ -346,7 +343,7 @@ def generate_pdf_table(dataframe):
     pdf.output(tmp_file.name)
     return tmp_file.name
 
-# --- Sidebar: ปุ่มสร้างและดาวน์โหลดรายงานภาพรวม ---
+# Sidebar: ปุ่มสร้างและดาวน์โหลดรายงานภาพรวม
 st.sidebar.markdown("---")
 st.sidebar.subheader("ออกรายงานภาพรวม")
 if st.sidebar.button("⚙️ ประมวลผลสร้างรายงานตาราง PDF"):
@@ -405,7 +402,6 @@ if not df_f.empty and 'Clean_Group' in df_f.columns:
 else:
     st.info("ไม่พบข้อมูลสำหรับสร้างตารางสรุปสถิติ")
 
-# เตรียม melted_all สำหรับส่วนอื่นๆ
 risk_cols = [c for c in df.columns if 'ระบุความเสี่ยงย่อย' in c]
 if not df_f.empty and risk_cols:
     melted_all = df_f.melt(id_vars=[c for c in df_f.columns if c not in risk_cols], value_vars=risk_cols, value_name='Risk_Detail').dropna(subset=['Risk_Detail'])
@@ -561,10 +557,10 @@ if not melted_all.empty:
         corrective_action = st.text_area("🛠️มาตรการแก้ไขเฉพาะหน้า (Corrective Action):", "ดึงผลตรวจกลับทันที แจ้งแพทย์ผู้รักษา และตรวจวิเคราะห์ซ้ำด้วยตัวอย่างใหม่", key="corr_act_k")
         preventive_action = st.text_area("🔒 มาตรการป้องกันระยะยาว (Preventive Action):", "กำหนดให้มีระบบ Mandatory Second Review สำหรับผลผิดปกติ และทบทวน SOP", key="prev_act_k")
 
-        # --- ส่วนเลือกรายชื่อคณะทำงานจากรายชื่อกลาง พร้อมระบบจำสถานะลายเซ็นใน Session ---
+        # --- ส่วนเลือกรายชื่อคณะทำงาน (แก้ไขปัญหาหน้าจอกระพริบ ตัด st.rerun ออก) ---
         st.markdown("---")
         st.markdown("##### ✍️ เลือกรายชื่อคณะทำงานผู้ร่วมทบทวนจากรายชื่อกลาง (Master List)")
-        st.write("ระบบทำการจดจำไฟล์ลายเซ็นที่คุณอัปโหลดไว้แล้วในเซสชัน เพื่อไม่ให้ต้องกดอัปโหลดใหม่ทุกครั้งที่กดทดสอบ:")
+        st.write("อัปโหลดลายเซ็นครั้งเดียว ระบบจะบันทึกจำไว้ให้ตลอดเซสชัน ไม่ต้องอัปโหลดซ้ำและไม่มีอาการหน้าจอกระพริบ:")
 
         selected_reviewers_for_report = []
         for idx, rev in enumerate(st.session_state['master_reviewers']):
@@ -573,7 +569,6 @@ if not melted_all.empty:
                 is_selected = st.checkbox(f"**{rev['name']}** ({rev['role']})\n*ตำแหน่ง: {rev['position']}*", value=True, key=f"chk_rev_{idx}")
             with col_up:
                 if "ผู้อำนวยการ" not in rev['position'] and "ผู้อนุมัติ" not in rev['role']:
-                    # แสดงสถานะว่ามีลายเซ็นเดิมอยู่แล้วหรือไม่
                     if rev['sig_path'] and os.path.exists(rev['sig_path']):
                         st.success("✔️ มีลายเซ็นในระบบแล้ว")
                     
@@ -583,7 +578,6 @@ if not melted_all.empty:
                         tmp_s.write(sig_upload.read())
                         tmp_s.close()
                         st.session_state['master_reviewers'][idx]['sig_path'] = tmp_s.name
-                        st.rerun() # รีรันเพื่อให้สถานะอัปเดตทันที
                 else:
                     st.info("ตำแหน่งนี้จะเว้นช่องลายเซ็นไว้ตามเงื่อนไข")
 
@@ -594,7 +588,7 @@ if not melted_all.empty:
         current_risk_row = matrix_df[matrix_df['Risk_Detail'] == selected_risk_item] if 'matrix_df' in locals() and not matrix_df.empty else pd.DataFrame()
         risk_lvl_val = current_risk_row['Risk_Level'].iloc[0] if not current_risk_row.empty else 'ปานกลาง (สีเหลือง)'
 
-        # --- แปลงกราฟเส้นแนวโน้มเป็นรูปภาพชั่วคราวสำหรับใส่ใน PDF ---
+        # แปลงกราฟเส้นแนวโน้มเป็นรูปภาพชั่วคราวสำหรับใส่ใน PDF
         temp_fig_path = None
         try:
             fig_bytes = fig_line.to_image(format="png", width=800, height=400, scale=2)
@@ -605,7 +599,6 @@ if not melted_all.empty:
         except Exception as e:
             temp_fig_path = None
 
-        # --- ฟังก์ชันสร้าง PDF พร้อมฝังฟอนต์ภาษาไทย (ป้องกัน Error latin-1) ---
         def generate_capa_pdf_with_master_list(risk_name, risk_lvl, man, machine, material, method, env, corr_act, prev_act, reviewers, fig_path=None):
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=True, margin=15)
@@ -613,10 +606,8 @@ if not melted_all.empty:
             font_name = setup_pdf_font(pdf)
             pdf.add_page()
             
-            # บังคับเซ็ตฟอนต์หลักเป็น Sarabun หรือฟอนต์ที่ปลอดภัยเสมอ
             pdf.set_font(font_name, size=14)
 
-            # --- ส่วนหัวรายงาน ---
             logo_url = "https://drive.google.com/uc?export=download&id=1V9sj6Y_W2uR65y86dIXZYc9r2xIzWeYB"
             try:
                 logo_resp = requests.get(logo_url, timeout=3)
@@ -666,7 +657,6 @@ if not melted_all.empty:
             pdf.multi_cell(0, 6, txt=f"- มาตรการแก้ไขเฉพาะหน้า: {str(corr_act)}\n- มาตรการป้องกันระยะยาว: {str(prev_act)}")
             pdf.ln(8)
 
-            # --- ส่วนลงนามดิจิทัล ---
             pdf.set_font(font_name, 'B', 11)
             pdf.cell(0, 6, txt="3. ลงนามคณะทำงานผู้ร่วมทบทวนและอนุมัติ", ln=True)
             
@@ -701,7 +691,7 @@ if not melted_all.empty:
             pdf.output(tmp_file.name)
             return tmp_file.name
 
-        # --- ปุ่มสร้างและดาวน์โหลดรายงาน CAPA PDF ---
+        # ปุ่มสร้างและดาวน์โหลดรายงาน CAPA PDF
         if st.button("📄 ประมวลผลสร้างรายงาน CAPA PDF"):
             try:
                 capa_pdf_path = generate_capa_pdf_with_master_list(
