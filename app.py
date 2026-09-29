@@ -41,12 +41,13 @@ def safe_text(txt):
     if not txt or pd.isnull(txt) or str(txt).strip() == 'None' or str(txt).strip() == 'nan':
         return "-"
     try:
-        if isinstance(txt, bytes):
-            text_str = txt.decode('utf-8', errors='ignore')
-        else:
-            text_str = str(txt)
-        # ป้องกันปัญหาไบต์เกิน 0x80 หรือรหัสพิเศษที่ทำให้ FPDF แครช
-        return text_str.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+        # แปลงเป็น string และกำจัดไบต์ที่มีปัญหาออกเด็ดขาด
+        text_str = str(txt)
+        # ตัดตัวอักษรพิเศษหรือสัญลักษณ์ที่ทำให้เกิด UnicodeDecodeError / 0x80 ออก
+        cleaned = text_str.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+        # แทนที่สัญลักษณ์พิเศษที่มักมีปัญหาในฟอนต์ PDF
+        cleaned = cleaned.replace('\r', ' ').replace('\n', ' ')
+        return cleaned
     except Exception:
         return "-"
 
@@ -74,16 +75,15 @@ def load_data():
         response = requests.get(url)
         response.raise_for_status()
         content = response.content
-        # วนลูปทดสอบการอ่าน Encoding หลายรูปแบบเพื่อป้องกันปัญหาไบต์ 0x80
         df = None
-        for enc in ['utf-8', 'tis-620', 'cp1252', 'utf-8-sig']:
+        for enc in ['utf-8-sig', 'utf-8', 'tis-620', 'cp1252']:
             try:
-                df = pd.read_csv(io.BytesIO(content), encoding=enc)
+                df = pd.read_csv(io.BytesIO(content), encoding=enc, errors='ignore')
                 break
-            except UnicodeDecodeError:
+            except Exception:
                 continue
         if df is None:
-            df = pd.read_csv(io.BytesIO(content), encoding='utf-8', errors='ignore')
+            df = pd.read_csv(io.BytesIO(content), encoding='latin1', errors='ignore')
     except Exception as e:
         return pd.DataFrame()
     
